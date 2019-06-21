@@ -1,0 +1,7 @@
+[package]
+name = "https-everywhere-lib-core"
+version = "0.1.0"
+authors = ["William Budington <bill@eff.org>"]
+edition = "2018"
+
+[dependencies]
