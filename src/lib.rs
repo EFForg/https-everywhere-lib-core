@@ -4,6 +4,9 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 #[cfg(feature="add_rulesets")]
 use std::collections::HashMap;
+#[cfg(test)]
+#[macro_use]
+extern crate lazy_static;
 
 #[cfg(feature="add_rulesets")]
 struct StaticJsonStrings {
@@ -342,5 +345,65 @@ impl RuleSets {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    pub const ENABLE_MIXED_RULESETS: bool = true;
+
+    lazy_static!{
+        pub static ref RULE_ACTIVE_STATES: HashMap<String, bool> = HashMap::new();
+    }
+
+    fn mock_rulesets_json() -> String {
+        fs::read_to_string("tests/mock_rulesets.json").unwrap()
+    }
+
+    fn add_mock_rulesets(rs: &mut RuleSets) {
+        rs.add_all_from_json_string(&mock_rulesets_json(), &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
+    }
+
+    #[test]
+    fn adds_targets_correctly() {
+        let mut rs = RuleSets::new();
+        add_mock_rulesets(&mut rs);
+        assert_eq!(rs.count_targets(), 28);
+    }
+
+    #[test]
+    fn rulesets_represented_correctly() {
+        let mut rs = RuleSets::new();
+        add_mock_rulesets(&mut rs);
+
+        let rulesets_representation = fs::read_to_string("tests/rulesets_representation.txt").unwrap();
+        assert_eq!(format!("{:?}", rs), rulesets_representation);
+    }
+
+    #[test]
+    fn potentially_applicable() {
+        let mut rs = RuleSets::new();
+        add_mock_rulesets(&mut rs);
+
+        assert_eq!(rs.potentially_applicable(&String::from("1fichier.com")).len(), 1);
+    }
+
+    #[test]
+    fn potentially_applicable_left_widlcard() {
+        let mut rs = RuleSets::new();
+        add_mock_rulesets(&mut rs);
+
+        assert_eq!(rs.potentially_applicable(&String::from("foo.storage.googleapis.com")).len(), 1);
+    }
+
+    #[test]
+    fn potentially_applicable_no_matches() {
+        let mut rs = RuleSets::new();
+        add_mock_rulesets(&mut rs);
+
+        assert_eq!(rs.potentially_applicable(&String::from("nonmatch.example.com")).len(), 0);
     }
 }
