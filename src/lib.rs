@@ -1,5 +1,41 @@
 use std::rc::Rc;
 use std::collections::BTreeMap;
+#[cfg(feature="add_rulesets")]
+use serde_json::Value;
+#[cfg(feature="add_rulesets")]
+use std::collections::HashMap;
+
+#[cfg(feature="add_rulesets")]
+struct StaticJsonStrings {
+    pub default_off: &'static str,
+    pub exclusion: &'static str,
+    pub from: &'static str,
+    pub host: &'static str,
+    pub mixed_content: &'static str,
+    pub name: &'static str,
+    pub platform: &'static str,
+    pub rule: &'static str,
+    pub securecookie: &'static str,
+    pub target: &'static str,
+    pub to: &'static str,
+    pub user_rule: &'static str,
+}
+
+#[cfg(feature="add_rulesets")]
+const JSON_STRINGS: StaticJsonStrings = StaticJsonStrings {
+    default_off: "default_off",
+    exclusion: "exclusion",
+    from: "from",
+    host: "host",
+    mixed_content: "mixedcontent",
+    name: "name",
+    platform: "platform",
+    rule: "rule",
+    securecookie: "securecookie",
+    target: "target",
+    to: "to",
+    user_rule: "user rule",
+};
 
 /// A Rule is used to rewrite URLs from some regular expression to some string
 #[derive(Debug)]
@@ -84,6 +120,60 @@ impl RuleSet {
             note: None
         }
     }
+
+    #[cfg(feature="add_rulesets")]
+    pub(crate) fn add_rules(&mut self, rules: &Vec<Value>) {
+        for rule in rules {
+            if let Value::Object(rule) = rule {
+                let from = match rule.get(JSON_STRINGS.from) {
+                    Some(Value::String(from)) => from.to_string(),
+                    _ => String::new(),
+                };
+                let to = match rule.get(JSON_STRINGS.to) {
+                    Some(Value::String(to)) => to.to_string(),
+                    _ => String::new(),
+                };
+                self.rules.push(Rule::new(from, to));
+            }
+        }
+    }
+
+    #[cfg(feature="add_rulesets")]
+    pub(crate) fn add_exclusions(&mut self, exclusions: &Vec<Value>) {
+        let mut exclusions_vec = vec![];
+        for exclusion in exclusions {
+            if let Value::String(exclusion) = exclusion {
+                exclusions_vec.push(exclusion.to_string());
+            }
+        }
+
+        self.exclusions = Some(exclusions_vec.join("|"));
+    }
+
+    #[cfg(feature="add_rulesets")]
+    pub(crate) fn add_cookierules(&mut self, cookierules: &Vec<Value>) {
+        let mut cookierules_vec = vec![];
+
+        for cookierule in cookierules {
+            if let Value::Object(cookierule) = cookierule {
+                let host = match cookierule.get(JSON_STRINGS.host) {
+                    Some(Value::String(host)) => host.to_string(),
+                    _ => String::new(),
+                };
+                let name = match cookierule.get(JSON_STRINGS.name) {
+                    Some(Value::String(name)) => name.to_string(),
+                    _ => String::new(),
+                };
+
+                cookierules_vec.push(
+                    CookieRule::new(
+                        host,
+                        name));
+            }
+        }
+
+        self.cookierules = Some(cookierules_vec);
+    }
 }
 
 
@@ -101,5 +191,156 @@ impl RuleSets {
     /// Returns the number of targets in the current RuleSets struct as a `usize`
     pub fn count_targets(&self) -> usize {
         self.0.len()
+    }
+
+    /// Construct and add new rulesets given a json string of values
+    ///
+    /// # Arguments
+    ///
+    /// * `json_string` - A json string representing the rulesets to add
+    /// * `enable_mixed_rulesets` - A bool indicating whether rulesets which trigger mixed
+    /// content blocking should be enabled
+    /// * `rule_active_states` - A HashMap which lets us know whether rulesets have been disabled
+    /// or enabled
+    /// * `scope` - An optional string which indicates the scope of the current batch of rulesets
+    /// being added (see the [ruleset update channels](https://github.com/EFForg/https-everywhere/blob/master/docs/en_US/ruleset-update-channels.md) documentation)
+    #[cfg(feature="add_rulesets")]
+    pub fn add_all_from_json_string(&mut self, json_string: &String, enable_mixed_rulesets: &bool, ruleset_active_states: &HashMap<String, bool>, scope: &Option<String>) {
+        let rulesets: Value = serde_json::from_str(&json_string).expect("Could not convert json string to serde_json::Value struct");
+        let scope: Rc<Option<String>> = Rc::new(scope.clone());
+
+        let mut add_one_from_json = |ruleset: Value| {
+            if let Value::Object(ruleset) = ruleset {
+                let mut ruleset_name: String;
+                let mut default_state = true;
+                let mut note = String::new();
+
+                if let Some(Value::String(default_off)) = ruleset.get(JSON_STRINGS.default_off) {
+                    if default_off != &JSON_STRINGS.user_rule {
+                        default_state = false;
+                    }
+                    note.push_str(default_off);
+                    note.push_str("\n");
+                }
+
+                if let Some(Value::String(platform)) = ruleset.get(JSON_STRINGS.platform) {
+                    if platform == &JSON_STRINGS.mixed_content {
+                        if !enable_mixed_rulesets {
+                            default_state = false;
+                        }
+                    } else {
+                        default_state = false;
+                    }
+
+                    note.push_str("Platform(s): ");
+                    note.push_str(platform);
+                    note.push_str("\n");
+                }
+
+                let mut active = default_state;
+                if let Some(Value::String(name)) = ruleset.get(JSON_STRINGS.name) {
+                    ruleset_name = name.to_string();
+
+                    match ruleset_active_states.get(&ruleset_name) {
+                        Some(false) => { active = false; }
+                        Some(true) => { active = true; }
+                        _ => {}
+                    }
+
+                    let mut rs = RuleSet::new(ruleset_name, Rc::clone(&scope));
+                    rs.default_state = default_state;
+                    rs.note = match note.len() {
+                        0 => None,
+                        _ => Some(note.trim().to_string())
+                    };
+
+                    rs.active = active;
+
+                    if let Some(Value::Array(rules)) = ruleset.get(JSON_STRINGS.rule) {
+                        rs.add_rules(rules);
+                    }
+
+                    if let Some(Value::Array(exclusions)) = ruleset.get(JSON_STRINGS.exclusion) {
+                        rs.add_exclusions(exclusions);
+                    }
+
+                    if let Some(Value::Array(securecookies)) = ruleset.get(JSON_STRINGS.securecookie) {
+                        rs.add_cookierules(securecookies);
+                    }
+
+                    let rs_rc = Rc::new(rs);
+                    if let Some(Value::Array(targets)) = ruleset.get(JSON_STRINGS.target) {
+                        for target in targets {
+                            if let Value::String(target) = target {
+                                match self.0.get_mut(target) {
+                                    Some(rs_vec) => {
+                                        rs_vec.push(Rc::clone(&rs_rc));
+                                    },
+                                    None => {
+                                        self.0.insert(target.to_string(), vec![Rc::clone(&rs_rc)]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        if let Value::Array(rulesets) = rulesets {
+            for ruleset in rulesets {
+                add_one_from_json(ruleset);
+            }
+        }
+    }
+
+    /// Return a vector of rulesets that apply to the given host
+    ///
+    /// # Arguments
+    ///
+    /// * `host` - A string which indicates the host to search for potentially applicable rulesets
+    #[cfg(feature="potentially_applicable")]
+    pub fn potentially_applicable(&self, host: &String) -> Vec<Rc<RuleSet>> {
+        let mut results = vec![];
+
+        self.try_add(&mut results, host);
+
+        // Ensure host is well-formed (RFC 1035)
+        if host.len() <= 0 || host.len() > 255 || host.find("..").is_some() {
+            return results;
+        }
+
+        // Replace www.example.com with www.example.*
+        // eat away from the right for once and only once
+        let mut segmented: Vec<&str> = host.split('.').collect();
+        let last_index = segmented.len() - 1;
+        let tld = segmented[last_index];
+
+        segmented[last_index] = "*";
+        let tmp_host = segmented.join(".");
+        self.try_add(&mut results, &tmp_host);
+        segmented[last_index] = tld;
+
+        // now eat away from the left, with *, so that for x.y.z.google.com we
+        // check *.y.z.google.com, *.z.google.com and *.google.com
+        for index in 0..(segmented.len() - 1) {
+            let mut segmented_tmp = segmented.clone();
+            segmented_tmp[index] = "*";
+            let tmp_host = segmented_tmp.join(".");
+            self.try_add(&mut results, &tmp_host);
+        }
+
+        results
+    }
+
+    #[cfg(feature="potentially_applicable")]
+    fn try_add(&self, results: &mut Vec<Rc<RuleSet>>, host: &String) {
+        if self.0.contains_key(host) {
+            if let Some(rulesets) = self.0.get(host) {
+                for ruleset in rulesets {
+                    results.push(Rc::clone(ruleset));
+                }
+            }
+        }
     }
 }

@@ -4,4 +4,10 @@ version = "0.1.0"
 authors = ["William Budington <bill@eff.org>"]
 edition = "2018"
 
+[features]
+default = ["add_rulesets", "potentially_applicable"]
+add_rulesets = ["serde_json"]
+potentially_applicable = []
+
 [dependencies]
+serde_json = { version = "1.0", optional = true }
