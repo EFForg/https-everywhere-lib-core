@@ -3,10 +3,13 @@ use std::collections::BTreeMap;
 #[cfg(feature="add_rulesets")]
 use serde_json::Value;
 #[cfg(feature="add_rulesets")]
+use strings::ERROR_SERDE_PARSE;
+#[cfg(feature="add_rulesets")]
 use std::collections::HashMap;
 #[cfg(test)]
 #[macro_use]
 extern crate lazy_static;
+mod strings;
 
 #[cfg(feature="add_rulesets")]
 struct StaticJsonStrings {
@@ -209,7 +212,7 @@ impl RuleSets {
     /// being added (see the [ruleset update channels](https://github.com/EFForg/https-everywhere/blob/master/docs/en_US/ruleset-update-channels.md) documentation)
     #[cfg(feature="add_rulesets")]
     pub fn add_all_from_json_string(&mut self, json_string: &String, enable_mixed_rulesets: &bool, ruleset_active_states: &HashMap<String, bool>, scope: &Option<String>) {
-        let rulesets: Value = serde_json::from_str(&json_string).expect("Could not convert json string to serde_json::Value struct");
+        let rulesets: Value = serde_json::from_str(&json_string).expect(ERROR_SERDE_PARSE);
         let scope: Rc<Option<String>> = Rc::new(scope.clone());
 
         let mut add_one_from_json = |ruleset: Value| {
