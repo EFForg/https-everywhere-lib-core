@@ -1,1 +1,2 @@
+#[cfg(any(feature="updates",feature="add_rulesets"))]
 pub const ERROR_SERDE_PARSE: &'static str = "Could not convert json string to serde_json::Value struct";
