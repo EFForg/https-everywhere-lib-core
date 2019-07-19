@@ -6,6 +6,9 @@ use serde_json::Value;
 use strings::ERROR_SERDE_PARSE;
 #[cfg(feature="add_rulesets")]
 use std::collections::HashMap;
+#[cfg(feature="updates")]
+mod update_channels;
+pub use update_channels::{UpdateChannel, UpdateChannels};
 #[cfg(test)]
 #[macro_use]
 extern crate lazy_static;
