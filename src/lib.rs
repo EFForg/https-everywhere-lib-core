@@ -17,18 +17,18 @@ mod strings;
 
 #[cfg(feature="add_rulesets")]
 struct StaticJsonStrings {
-    pub default_off: &'static str,
-    pub exclusion: &'static str,
-    pub from: &'static str,
-    pub host: &'static str,
-    pub mixed_content: &'static str,
-    pub name: &'static str,
-    pub platform: &'static str,
-    pub rule: &'static str,
-    pub securecookie: &'static str,
-    pub target: &'static str,
-    pub to: &'static str,
-    pub user_rule: &'static str,
+    default_off: &'static str,
+    exclusion: &'static str,
+    from: &'static str,
+    host: &'static str,
+    mixed_content: &'static str,
+    name: &'static str,
+    platform: &'static str,
+    rule: &'static str,
+    securecookie: &'static str,
+    target: &'static str,
+    to: &'static str,
+    user_rule: &'static str,
 }
 
 #[cfg(feature="add_rulesets")]
