@@ -8,6 +8,7 @@ use strings::ERROR_SERDE_PARSE;
 use std::collections::HashMap;
 #[cfg(feature="updates")]
 mod update_channels;
+#[cfg(feature="updates")]
 pub use update_channels::{UpdateChannel, UpdateChannels};
 #[cfg(test)]
 #[macro_use]
