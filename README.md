@@ -1,6 +1,6 @@
 # HTTPS Everywhere Core Library
 
-[![Build Status](https://api.travis-ci.com/efforg/https-everywhere-lib-core.svg?branch=master)](https://travis-ci.com/efforg/https-everywhere-lib-core)
+[![Build Status](https://api.travis-ci.org/efforg/https-everywhere-lib-core.svg?branch=master)](https://travis-ci.org/efforg/https-everywhere-lib-core)
 [![Latest Version](https://img.shields.io/crates/v/https-everywhere-lib-core.svg)](https://crates.io/crates/https-everywhere-lib-core)
 [![Rust Documentation](https://img.shields.io/badge/api-rustdoc-blue.svg)](https://docs.rs/https-everywhere-lib-core)
 
