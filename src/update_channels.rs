@@ -99,6 +99,18 @@ impl From<&Value> for UpdateChannel {
 #[derive(Debug)]
 pub struct UpdateChannels(Vec<UpdateChannel>);
 
+impl UpdateChannels {
+    /// Get an immutable reference to all update channels
+    pub fn get_all(&self) -> &Vec<UpdateChannel>{
+       &self.0
+    }
+
+    /// Get a mutable reference to all update channels
+    pub fn get_all_mut(&mut self) -> &mut Vec<UpdateChannel>{
+       &mut self.0
+    }
+}
+
 /// Returns update channels given a JSON string
 ///
 /// See the implementation of `From<&String> for UpdateChannel` for more detail

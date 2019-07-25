@@ -1,18 +1,26 @@
 use std::rc::Rc;
 use std::collections::BTreeMap;
+
 #[cfg(feature="add_rulesets")]
 use serde_json::Value;
 #[cfg(feature="add_rulesets")]
 use strings::ERROR_SERDE_PARSE;
 #[cfg(feature="add_rulesets")]
 use std::collections::HashMap;
+
 #[cfg(feature="updates")]
 mod update_channels;
 #[cfg(feature="updates")]
 pub use update_channels::{UpdateChannel, UpdateChannels};
+#[cfg(feature="updates")]
+mod updater;
+#[cfg(feature="updates")]
+pub use updater::Updater;
+
 #[cfg(test)]
 #[macro_use]
 extern crate lazy_static;
+
 mod strings;
 
 #[cfg(feature="add_rulesets")]

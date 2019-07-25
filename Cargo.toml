@@ -11,11 +11,12 @@ repository = "https://github.com/efforg/https-everywhere-lib-core"
 default = ["add_rulesets", "potentially_applicable", "updates"]
 add_rulesets = ["serde_json"]
 potentially_applicable = []
-updates = ["openssl", "serde_json"]
+updates = ["openssl", "serde_json", "http_req"]
 
 [dependencies]
 serde_json = { version = "1.0", optional = true }
 openssl = { version = "0.10", optional = true }
+http_req = { version = "0.5", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.3"
