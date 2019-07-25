@@ -24,11 +24,11 @@ const JSON_STRINGS: StaticJsonStrings = StaticJsonStrings {
 /// rulesets included with the application.
 #[derive(Debug)]
 pub struct UpdateChannel {
-    name: String,
-    key: Rsa<Public>,
-    update_path_prefix: String,
-    scope: Option<String>,
-    replaces_default_rulesets: bool,
+    pub name: String,
+    pub key: Rsa<Public>,
+    pub update_path_prefix: String,
+    pub scope: Option<String>,
+    pub replaces_default_rulesets: bool,
 }
 
 impl From<&String> for UpdateChannel {
