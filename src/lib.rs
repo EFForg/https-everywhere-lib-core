@@ -8,6 +8,13 @@ pub use update_channels::{UpdateChannel, UpdateChannels};
 mod updater;
 #[cfg(feature="updates")]
 pub use updater::Updater;
+#[cfg(feature="updates")]
+mod storage;
+#[cfg(feature="updates")]
+pub use storage::Storage;
+#[cfg(feature="updates")]
+#[macro_use]
+extern crate log;
 
 mod strings;
 

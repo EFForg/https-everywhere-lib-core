@@ -1,14 +1,13 @@
-use crate::update_channels::UpdateChannels;
-use crate::update_channels::UpdateChannel;
-use crate::RuleSets;
-
+use crate::{RuleSets, Storage, UpdateChannel, UpdateChannels};
 use http_req::request;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-type Timestamp = i32;
+type Timestamp = usize;
 
 pub struct Updater<'a> {
     rulesets: &'a mut RuleSets,
     update_channels: &'a UpdateChannels,
+    storage: &'a Storage,
     interval: usize,
 }
 
@@ -20,11 +19,13 @@ impl<'a> Updater<'a> {
     ///
     /// * `rulesets` - A ruleset struct to update
     /// * `update_channels` - The update channels where to look for new rulesets
+    /// * `storage` - The storage engine for key-value pairs
     /// * `interval` - The interval to check for new rulesets
-    pub fn new(rulesets: &'a mut RuleSets, update_channels: &'a UpdateChannels, interval: usize) -> Updater<'a> {
+    pub fn new(rulesets: &'a mut RuleSets, update_channels: &'a UpdateChannels, storage: &'a Storage, interval: usize, ) -> Updater<'a> {
         Updater {
             rulesets,
             update_channels,
+            storage,
             interval,
         }
     }
@@ -54,16 +55,34 @@ impl<'a> Updater<'a> {
                 Err(_) => return None
             };
 
-            Some(timestamp)
+            let stored_timestamp: Timestamp = self.storage.get_int(String::from("rulesets-timestamp: ") + &uc.name);
+
+            if stored_timestamp < timestamp {
+                Some(timestamp)
+            } else {
+                None
+            }
         } else {
             None
         }
     }
 
     pub fn perform_check(&self) {
+        info!("Checking for new rulesets.");
+
+	let since_the_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+	let current_timestamp = since_the_epoch.as_secs();
+	self.storage.set_int(String::from("last-checked"), current_timestamp as usize);
+
+	let extension_timestamp = self.storage.get_int(String::from("extension-timestamp"));
+
         for uc in self.update_channels.get_all() {
-            if let Some(timestamp) = self.check_for_new_rulesets(uc) {
-                println!("New rulesets are available for {:?} with timestamp {:?}", uc, timestamp);
+            if let Some(new_rulesets_timestamp) = self.check_for_new_rulesets(uc) {
+                if uc.replaces_default_rulesets && extension_timestamp > new_rulesets_timestamp {
+                    info!("{}: A new ruleset bundle has been released, but it is older than the extension-bundled rulesets it replaces.  Skipping.", uc.name);
+                    continue;
+                }
+                info!("{}: A new ruleset bundle has been released.  Downloading now.", uc.name);
             }
         }
     }
