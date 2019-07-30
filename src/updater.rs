@@ -2,6 +2,7 @@ use crate::{RuleSets, Storage, UpdateChannel, UpdateChannels};
 use flate2::read::GzDecoder;
 use http_req::request;
 use openssl::hash::MessageDigest;
+use openssl::pkey::PKey;
 use openssl::rsa::Padding;
 use openssl::sign::Verifier;
 use serde_json::Value;
@@ -125,7 +126,8 @@ impl<'a> Updater<'a> {
     }
 
     pub fn verify_and_store_new_rulesets(&mut self, signature: Vec<u8>, rulesets: Vec<u8>, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(), Box<dyn Error>> {
-        let mut verifier = Verifier::new(MessageDigest::sha256(), &update_channel.key)?;
+        let update_channel_key = PKey::from_rsa(update_channel.key.clone())?;
+        let mut verifier = Verifier::new(MessageDigest::sha256(), &update_channel_key)?;
         verifier.set_rsa_padding(Padding::PKCS1_PSS)?;
 
         verifier.update(&rulesets)?;

@@ -1,4 +1,4 @@
-use openssl::pkey::{PKey, Public};
+use openssl::{rsa::Rsa, pkey::Public};
 use serde_json::Value;
 use crate::strings::ERROR_SERDE_PARSE;
 
@@ -22,9 +22,10 @@ const JSON_STRINGS: StaticJsonStrings = StaticJsonStrings {
 /// An UpdateChannel defines where to find ruleset updates, the key to verify them, the scope they
 /// are applied to (which should be a regular expression), and whether they replace the default
 /// rulesets included with the application.
+#[derive(Debug)]
 pub struct UpdateChannel {
     pub name: String,
-    pub key: PKey<Public>,
+    pub key: Rsa<Public>,
     pub update_path_prefix: String,
     pub scope: Option<String>,
     pub replaces_default_rulesets: bool,
@@ -73,7 +74,7 @@ impl From<&Value> for UpdateChannel {
             };
             let key = match update_channel.get(JSON_STRINGS.pem) {
                 Some(Value::String(pem)) => {
-                    match PKey::public_key_from_pem(&pem.clone().into_bytes()) {
+                    match Rsa::public_key_from_pem(&pem.clone().into_bytes()) {
                         Ok(key) => key,
                         _ => panic!("Could not parse public key")
                     }
@@ -95,6 +96,7 @@ impl From<&Value> for UpdateChannel {
 
 
 /// RuleSets consists of a tuple vec of update channels
+#[derive(Debug)]
 pub struct UpdateChannels(Vec<UpdateChannel>);
 
 impl UpdateChannels {
