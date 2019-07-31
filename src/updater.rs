@@ -39,24 +39,26 @@ impl Error for UpdaterError {
 }
 
 
-/// A struct which performs updates for rulesets from update channels
 pub struct Updater<'a> {
+    rulesets: &'a mut RuleSets,
     update_channels: &'a UpdateChannels,
     storage: &'a Storage,
     interval: usize,
 }
 
 impl<'a> Updater<'a> {
-    /// Returns an updater with the update channels, storage, and interval to check for new
-    /// rulesets
+    /// Returns an updater with the rulesets, update channels, storage, and interval to check for
+    /// new rulesets
     ///
     /// # Arguments
     ///
+    /// * `rulesets` - A ruleset struct to update
     /// * `update_channels` - The update channels where to look for new rulesets
     /// * `storage` - The storage engine for key-value pairs
     /// * `interval` - The interval to check for new rulesets
-    pub fn new(update_channels: &'a UpdateChannels, storage: &'a Storage, interval: usize, ) -> Updater<'a> {
+    pub fn new(rulesets: &'a mut RuleSets, update_channels: &'a UpdateChannels, storage: &'a Storage, interval: usize, ) -> Updater<'a> {
         Updater {
+            rulesets,
             update_channels,
             storage,
             interval,
