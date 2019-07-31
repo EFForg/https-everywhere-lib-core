@@ -9,6 +9,15 @@ use crate::strings::ERROR_SERDE_PARSE;
 use std::collections::HashMap;
 
 
+#[cfg(any(test,feature="updates"))]
+pub const ENABLE_MIXED_RULESETS: bool = true;
+
+#[cfg(any(test,feature="updates"))]
+lazy_static!{
+    pub static ref RULE_ACTIVE_STATES: HashMap<String, bool> = HashMap::new();
+}
+
+
 #[cfg(feature="add_rulesets")]
 struct StaticJsonStrings {
     default_off: &'static str,
@@ -211,6 +220,11 @@ impl RuleSets {
     #[cfg(feature="add_rulesets")]
     pub fn add_all_from_json_string(&mut self, json_string: &String, enable_mixed_rulesets: &bool, ruleset_active_states: &HashMap<String, bool>, scope: &Option<String>) {
         let rulesets: Value = serde_json::from_str(&json_string).expect(ERROR_SERDE_PARSE);
+        self.add_all_from_serde_value(rulesets, enable_mixed_rulesets, ruleset_active_states, scope);
+    }
+
+    #[cfg(feature="add_rulesets")]
+    pub fn add_all_from_serde_value(&mut self, rulesets: Value, enable_mixed_rulesets: &bool, ruleset_active_states: &HashMap<String, bool>, scope: &Option<String>) {
         let scope: Rc<Option<String>> = Rc::new(scope.clone());
 
         let mut add_one_from_json = |ruleset: Value| {
@@ -353,12 +367,6 @@ impl RuleSets {
 mod tests {
     use super::*;
     use std::fs;
-
-    pub const ENABLE_MIXED_RULESETS: bool = true;
-
-    lazy_static!{
-        pub static ref RULE_ACTIVE_STATES: HashMap<String, bool> = HashMap::new();
-    }
 
     fn mock_rulesets_json() -> String {
         fs::read_to_string("tests/mock_rulesets.json").unwrap()

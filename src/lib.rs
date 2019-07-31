@@ -18,6 +18,6 @@ extern crate log;
 
 mod strings;
 
-#[cfg(test)]
+#[cfg(any(test,feature="updates"))]
 #[macro_use]
 extern crate lazy_static;

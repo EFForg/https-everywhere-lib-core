@@ -1,4 +1,4 @@
-use crate::{RuleSets, Storage, UpdateChannel, UpdateChannels};
+use crate::{rulesets::ENABLE_MIXED_RULESETS, rulesets::RULE_ACTIVE_STATES, RuleSets, Storage, UpdateChannel, UpdateChannels};
 use flate2::read::GzDecoder;
 use http_req::request;
 use openssl::hash::MessageDigest;
@@ -39,26 +39,24 @@ impl Error for UpdaterError {
 }
 
 
+/// A struct which performs updates for rulesets from update channels
 pub struct Updater<'a> {
-    rulesets: &'a mut RuleSets,
     update_channels: &'a UpdateChannels,
     storage: &'a Storage,
     interval: usize,
 }
 
 impl<'a> Updater<'a> {
-    /// Returns an updater with the rulesets, update channels, and interval to check for new
+    /// Returns an updater with the update channels, storage, and interval to check for new
     /// rulesets
     ///
     /// # Arguments
     ///
-    /// * `rulesets` - A ruleset struct to update
     /// * `update_channels` - The update channels where to look for new rulesets
     /// * `storage` - The storage engine for key-value pairs
     /// * `interval` - The interval to check for new rulesets
-    pub fn new(rulesets: &'a mut RuleSets, update_channels: &'a UpdateChannels, storage: &'a Storage, interval: usize, ) -> Updater<'a> {
+    pub fn new(update_channels: &'a UpdateChannels, storage: &'a Storage, interval: usize, ) -> Updater<'a> {
         Updater {
-            rulesets,
             update_channels,
             storage,
             interval,
@@ -71,7 +69,7 @@ impl<'a> Updater<'a> {
     /// # Arguments
     ///
     /// * `uc` - The update channel to check for new rulesets on
-    pub fn check_for_new_rulesets(&self, uc: &UpdateChannel) -> Option<Timestamp> {
+    fn check_for_new_rulesets(&self, uc: &UpdateChannel) -> Option<Timestamp> {
         let mut writer = Vec::new();
 
         let res = match request::get(uc.update_path_prefix.clone() + "/latest-rulesets-timestamp", &mut writer) {
@@ -102,7 +100,14 @@ impl<'a> Updater<'a> {
         }
     }
 
-    pub fn get_new_rulesets(&self, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(Vec<u8>, Vec<u8>), Box<dyn Error>> {
+    /// Given an update channel and timestamp, this returns a result-wrapped tuple, the first value the first value is
+    /// a `Vec<u8>` of the signature file, the second is a `Vec<u8>` of the rulesets file.
+    ///
+    /// # Arguments
+    ///
+    /// * `rulesets_timestamp` - The timestamp for the rulesets
+    /// * `update_channel` - The update channel to download rulesets for
+    fn get_new_rulesets(&self, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(Vec<u8>, Vec<u8>), Box<dyn Error>> {
         self.storage.set_int(String::from("rulesets-timestamp: ") + &update_channel.name, rulesets_timestamp);
 
         // TODO: Use futures to asynchronously fetch signature and rulesets
@@ -125,7 +130,18 @@ impl<'a> Updater<'a> {
         Ok((signature_writer, rulesets_writer))
     }
 
-    pub fn verify_and_store_new_rulesets(&mut self, signature: Vec<u8>, rulesets: Vec<u8>, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(), Box<dyn Error>> {
+    /// If the given signature for the given rulesets verifies with the key stored in the given
+    /// update channel, store this update channel in the struct storage layer.  Returns a
+    /// result-wrapped unit
+    ///
+    /// # Arguments
+    ///
+    /// * `signature` - A SHA256 RSA PSS signature
+    /// * `rulesets` - Rulesets to check the signature for
+    /// * `rulesets_timestamp` - The timestamp for the rulesets, which we use to verify that it
+    /// matches the timestamp in the signed rulesets JSON
+    /// * `update_channel` - Contains the key which we verify the signatures with
+    fn verify_and_store_new_rulesets(&mut self, signature: Vec<u8>, rulesets: Vec<u8>, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(), Box<dyn Error>> {
         let update_channel_key = PKey::from_rsa(update_channel.key.clone())?;
         let mut verifier = Verifier::new(MessageDigest::sha256(), &update_channel_key)?;
         verifier.set_rsa_padding(Padding::PKCS1_PSS)?;
@@ -159,6 +175,13 @@ impl<'a> Updater<'a> {
         Ok(())
     }
 
+    /// Perform a check for updates.  For all ruleset update channels:
+    ///
+    /// 1. Check if new rulesets exist by requesting a defined endpoint for a timestamp, which is
+    ///    compared to a stored timestamp
+    /// 2. If new rulesets exist, download them along with a signature
+    /// 3. Verify if the signature is valid, and if so...
+    /// 4. Store the rulesets
     pub fn perform_check(&mut self) {
         info!("Checking for new rulesets.");
 
@@ -200,5 +223,55 @@ impl<'a> Updater<'a> {
         if some_updated {
             info!("Some have been updated!");
         }
+    }
+
+    /// Construct a rulesets struct from the stored rulesets
+    ///
+    /// # Arguments
+    ///
+    /// * `default_rulesets` - An optional string.  This is used if any of the stored rulesets
+    /// replace the defaults, as defined in the update channel they belong to
+    pub fn rulesets_from_storage(&mut self, default_rulesets: Option<String>) -> RuleSets {
+        type OkResult = (Value, Option<String>, bool);
+
+        // TODO: Use futures to asynchronously apply stored rulesets
+        let rulesets_closure = |uc: &UpdateChannel| -> Result<OkResult, Box<dyn Error>> {
+            let rulesets_json_string = self.storage.get_string(format!("rulesets: {}", &uc.name));
+
+            if rulesets_json_string != "" {
+                info!("{}: Applying stored rulesets.", &uc.name);
+
+                let rulesets_json_value: Value = serde_json::from_str(&rulesets_json_string)?;
+                let inner_rulesets: Value = rulesets_json_value.get("rulesets").unwrap().clone();
+                Ok((inner_rulesets, uc.scope.clone(), uc.replaces_default_rulesets))
+            } else {
+                Err(Box::new(UpdaterError::new(format!("{} Could not retrieve stored rulesets", &uc.name))))
+            }
+        };
+
+        let mut rulesets_tuple_results = vec![];
+        for uc in self.update_channels.get_all() {
+            rulesets_tuple_results.push(rulesets_closure(uc));
+        }
+
+        let rulesets_tuples: Vec<OkResult> = rulesets_tuple_results.into_iter().filter(|rt| rt.is_ok()).map(|rt| rt.unwrap()).collect();
+        let replaces = rulesets_tuples.iter().fold(false, |acc, rt| {
+            if rt.2 {
+                true
+            } else {
+                acc
+            }
+        });
+
+        let mut rs = RuleSets::new();
+        for rt in rulesets_tuples {
+            rs.add_all_from_serde_value(rt.0, &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &rt.1);
+        }
+
+        if !replaces && !default_rulesets.is_none() {
+            rs.add_all_from_json_string(&default_rulesets.unwrap(), &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
+        }
+
+        rs
     }
 }
