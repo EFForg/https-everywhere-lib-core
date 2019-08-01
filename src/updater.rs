@@ -6,6 +6,7 @@ use openssl::pkey::PKey;
 use openssl::rsa::Padding;
 use openssl::sign::Verifier;
 use serde_json::Value;
+use std::cmp;
 use std::error::Error;
 use std::fmt;
 use std::io::Read;
@@ -43,7 +44,8 @@ pub struct Updater<'a> {
     rulesets: &'a mut RuleSets,
     update_channels: &'a UpdateChannels,
     storage: &'a Storage,
-    interval: usize,
+    default_rulesets: Option<String>,
+    periodicity: usize,
 }
 
 impl<'a> Updater<'a> {
@@ -55,14 +57,24 @@ impl<'a> Updater<'a> {
     /// * `rulesets` - A ruleset struct to update
     /// * `update_channels` - The update channels where to look for new rulesets
     /// * `storage` - The storage engine for key-value pairs
-    /// * `interval` - The interval to check for new rulesets
-    pub fn new(rulesets: &'a mut RuleSets, update_channels: &'a UpdateChannels, storage: &'a Storage, interval: usize, ) -> Updater<'a> {
+    /// * `default_rulesets` - An optional string representing the default rulesets, which may or
+    /// may not be replaced by updates
+    /// * `periodicity` - The interval to check for new rulesets
+    pub fn new(rulesets: &'a mut RuleSets, update_channels: &'a UpdateChannels, storage: &'a Storage, default_rulesets: Option<String>, periodicity: usize) -> Updater<'a> {
         Updater {
             rulesets,
             update_channels,
             storage,
-            interval,
+            default_rulesets,
+            periodicity,
         }
+    }
+
+    /// Get the current timestamp in seconds
+    fn current_timestamp() -> Timestamp {
+	let since_the_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+	let current_timestamp = since_the_epoch.as_secs();
+        current_timestamp as Timestamp
     }
 
     /// Returns an `Option<i32>` optional timestamp if there are new rulesets.  If no new rulesets
@@ -187,9 +199,7 @@ impl<'a> Updater<'a> {
     pub fn perform_check(&mut self) {
         info!("Checking for new rulesets.");
 
-	let since_the_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-	let current_timestamp = since_the_epoch.as_secs();
-	self.storage.set_int(String::from("last-checked"), current_timestamp as usize);
+	self.storage.set_int(String::from("last-checked"), Self::current_timestamp());
 
 	let extension_timestamp = self.storage.get_int(String::from("extension-timestamp"));
 
@@ -223,17 +233,12 @@ impl<'a> Updater<'a> {
         }
 
         if some_updated {
-            info!("Some have been updated!");
+            self.apply_stored_rulesets();
         }
     }
 
     /// Modify rulesets struct to apply the stored rulesets
-    ///
-    /// # Arguments
-    ///
-    /// * `default_rulesets` - An optional string.  This is used if any of the stored rulesets
-    /// replace the defaults, as defined in the update channel they belong to
-    pub fn apply_stored_rulesets(&mut self, default_rulesets: Option<String>) {
+    pub fn apply_stored_rulesets(&mut self) {
         type OkResult = (Value, Option<String>, bool);
 
         // TODO: Use futures to asynchronously apply stored rulesets
@@ -270,8 +275,16 @@ impl<'a> Updater<'a> {
             self.rulesets.add_all_from_serde_value(rt.0, &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &rt.1);
         }
 
-        if !replaces && !default_rulesets.is_none() {
-            self.rulesets.add_all_from_json_string(&default_rulesets.unwrap(), &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
+        if !replaces && !self.default_rulesets.is_none() {
+            self.rulesets.add_all_from_json_string(&self.default_rulesets.clone().unwrap(), &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
         }
+    }
+
+    /// Return the time until we should check for new rulesets, in seconds
+    pub fn time_to_next_check(&self) -> usize {
+        let last_checked = self.storage.get_int(String::from("last-checked"));
+        let current_timestamp = Self::current_timestamp();
+        let secs_since_last_checked = current_timestamp - last_checked;
+        cmp::max(0, self.periodicity as isize - secs_since_last_checked as isize) as usize
     }
 }
