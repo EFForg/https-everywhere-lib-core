@@ -227,13 +227,13 @@ impl<'a> Updater<'a> {
         }
     }
 
-    /// Construct a rulesets struct from the stored rulesets
+    /// Modify rulesets struct to apply the stored rulesets
     ///
     /// # Arguments
     ///
     /// * `default_rulesets` - An optional string.  This is used if any of the stored rulesets
     /// replace the defaults, as defined in the update channel they belong to
-    pub fn rulesets_from_storage(&mut self, default_rulesets: Option<String>) -> RuleSets {
+    pub fn apply_stored_rulesets(&mut self, default_rulesets: Option<String>) {
         type OkResult = (Value, Option<String>, bool);
 
         // TODO: Use futures to asynchronously apply stored rulesets
@@ -265,15 +265,13 @@ impl<'a> Updater<'a> {
             }
         });
 
-        let mut rs = RuleSets::new();
+        self.rulesets.clear();
         for rt in rulesets_tuples {
-            rs.add_all_from_serde_value(rt.0, &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &rt.1);
+            self.rulesets.add_all_from_serde_value(rt.0, &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &rt.1);
         }
 
         if !replaces && !default_rulesets.is_none() {
-            rs.add_all_from_json_string(&default_rulesets.unwrap(), &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
+            self.rulesets.add_all_from_json_string(&default_rulesets.unwrap(), &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
         }
-
-        rs
     }
 }

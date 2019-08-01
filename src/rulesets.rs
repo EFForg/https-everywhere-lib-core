@@ -206,6 +206,11 @@ impl RuleSets {
         self.0.len()
     }
 
+    /// Clears the ruleset btreemap of all values
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
     /// Construct and add new rulesets given a json string of values
     ///
     /// # Arguments
