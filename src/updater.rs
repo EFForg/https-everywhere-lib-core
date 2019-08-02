@@ -287,4 +287,17 @@ impl<'a> Updater<'a> {
         let secs_since_last_checked = current_timestamp - last_checked;
         cmp::max(0, self.periodicity as isize - secs_since_last_checked as isize) as usize
     }
+
+    /// Clear the stored rulesets for any update channels which replace the default rulesets.  This
+    /// should be run when a new version of the extension is released, so the bundled rulesets are
+    /// not overwritten by old stored rulesets.
+    pub fn clear_replacement_update_channels(&self) {
+        for uc in self.update_channels.get_all() {
+            if uc.replaces_default_rulesets {
+                self.storage.set_int(format!("rulesets-timestamp: {}", &uc.name), 0);
+                self.storage.set_int(format!("rulesets-stored-timestamp: {}", &uc.name), 0);
+                self.storage.set_string(format!("rulesets: {}", &uc.name), String::from(""));
+            }
+        }
+    }
 }
