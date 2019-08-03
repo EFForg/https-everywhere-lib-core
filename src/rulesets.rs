@@ -9,10 +9,10 @@ use crate::strings::ERROR_SERDE_PARSE;
 use std::collections::HashMap;
 
 
-#[cfg(any(test,feature="updates"))]
+#[cfg(any(all(test,feature="add_rulesets"),feature="updater"))]
 pub const ENABLE_MIXED_RULESETS: bool = true;
 
-#[cfg(any(test,feature="updates"))]
+#[cfg(any(all(test,feature="add_rulesets"),feature="updater"))]
 lazy_static!{
     pub static ref RULE_ACTIVE_STATES: HashMap<String, bool> = HashMap::new();
 }
@@ -368,7 +368,7 @@ impl RuleSets {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test,feature="add_rulesets"))]
 mod tests {
     use super::*;
     use std::fs;
@@ -398,6 +398,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature="potentially_applicable")]
     fn potentially_applicable() {
         let mut rs = RuleSets::new();
         add_mock_rulesets(&mut rs);
@@ -406,6 +407,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature="potentially_applicable")]
     fn potentially_applicable_left_widlcard() {
         let mut rs = RuleSets::new();
         add_mock_rulesets(&mut rs);
@@ -414,6 +416,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature="potentially_applicable")]
     fn potentially_applicable_no_matches() {
         let mut rs = RuleSets::new();
         add_mock_rulesets(&mut rs);

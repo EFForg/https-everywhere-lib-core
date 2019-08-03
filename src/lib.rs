@@ -1,23 +1,23 @@
 mod rulesets;
 pub use rulesets::{Rule, CookieRule, RuleSet, RuleSets};
-#[cfg(feature="updates")]
+#[cfg(feature="updater")]
 mod update_channels;
-#[cfg(feature="updates")]
+#[cfg(feature="updater")]
 pub use update_channels::{UpdateChannel, UpdateChannels};
-#[cfg(feature="updates")]
+#[cfg(feature="updater")]
 mod updater;
-#[cfg(feature="updates")]
+#[cfg(feature="updater")]
 pub use updater::Updater;
-#[cfg(feature="updates")]
+#[cfg(feature="updater")]
 mod storage;
-#[cfg(feature="updates")]
+#[cfg(any(feature="rewriter",feature="updater"))]
 pub use storage::Storage;
-#[cfg(feature="updates")]
+#[cfg(any(feature="rewriter",feature="updater"))]
 #[macro_use]
 extern crate log;
 
 mod strings;
 
-#[cfg(any(test,feature="updates"))]
+#[cfg(any(all(test,feature="add_rulesets"),feature="updater"))]
 #[macro_use]
 extern crate lazy_static;
