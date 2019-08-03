@@ -102,7 +102,7 @@ impl<'a> Updater<'a> {
                 Err(_) => return None
             };
 
-            let stored_timestamp: Timestamp = self.storage.get_int(String::from("rulesets-timestamp: ") + &uc.name);
+            let stored_timestamp: Timestamp = self.storage.get_int(format!("rulesets-timestamp: {}", &uc.name));
 
             if stored_timestamp < timestamp {
                 Some(timestamp)
@@ -122,7 +122,7 @@ impl<'a> Updater<'a> {
     /// * `rulesets_timestamp` - The timestamp for the rulesets
     /// * `update_channel` - The update channel to download rulesets for
     fn get_new_rulesets(&self, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(Vec<u8>, Vec<u8>), Box<dyn Error>> {
-        self.storage.set_int(String::from("rulesets-timestamp: ") + &update_channel.name, rulesets_timestamp);
+        self.storage.set_int(format!("rulesets-timestamp: {}", &update_channel.name), rulesets_timestamp);
 
         // TODO: Use futures to asynchronously fetch signature and rulesets
 
