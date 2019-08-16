@@ -102,7 +102,7 @@ impl<'a> Updater<'a> {
                 Err(_) => return None
             };
 
-            let stored_timestamp: Timestamp = self.storage.get_int(format!("rulesets-timestamp: {}", &uc.name));
+            let stored_timestamp: Timestamp = self.storage.get_int(format!("rulesets-timestamp: {}", &uc.name)).unwrap_or(0);
 
             if stored_timestamp < timestamp {
                 Some(timestamp)
@@ -201,7 +201,7 @@ impl<'a> Updater<'a> {
 
 	self.storage.set_int(String::from("last-checked"), Self::current_timestamp());
 
-	let extension_timestamp = self.storage.get_int(String::from("extension-timestamp"));
+	let extension_timestamp = self.storage.get_int(String::from("extension-timestamp")).unwrap_or(0);
 
         let mut some_updated = false;
         for uc in self.update_channels.get_all() {
@@ -243,16 +243,15 @@ impl<'a> Updater<'a> {
 
         // TODO: Use futures to asynchronously apply stored rulesets
         let rulesets_closure = |uc: &UpdateChannel| -> Result<OkResult, Box<dyn Error>> {
-            let rulesets_json_string = self.storage.get_string(format!("rulesets: {}", &uc.name));
+            match self.storage.get_string(format!("rulesets: {}", &uc.name)) {
+                Some(rulesets_json_string) => {
+                    info!("{}: Applying stored rulesets.", &uc.name);
 
-            if rulesets_json_string != "" {
-                info!("{}: Applying stored rulesets.", &uc.name);
-
-                let rulesets_json_value: Value = serde_json::from_str(&rulesets_json_string)?;
-                let inner_rulesets: Value = rulesets_json_value.get("rulesets").unwrap().clone();
-                Ok((inner_rulesets, uc.scope.clone(), uc.replaces_default_rulesets))
-            } else {
-                Err(Box::new(UpdaterError::new(format!("{} Could not retrieve stored rulesets", &uc.name))))
+                    let rulesets_json_value: Value = serde_json::from_str(&rulesets_json_string)?;
+                    let inner_rulesets: Value = rulesets_json_value.get("rulesets").unwrap().clone();
+                    Ok((inner_rulesets, uc.scope.clone(), uc.replaces_default_rulesets))
+                }
+                None => Err(Box::new(UpdaterError::new(format!("{} Could not retrieve stored rulesets", &uc.name))))
             }
         };
 
@@ -282,7 +281,7 @@ impl<'a> Updater<'a> {
 
     /// Return the time until we should check for new rulesets, in seconds
     pub fn time_to_next_check(&self) -> usize {
-        let last_checked = self.storage.get_int(String::from("last-checked"));
+        let last_checked = self.storage.get_int(String::from("last-checked")).unwrap_or(0);
         let current_timestamp = Self::current_timestamp();
         let secs_since_last_checked = current_timestamp - last_checked;
         cmp::max(0, self.periodicity as isize - secs_since_last_checked as isize) as usize

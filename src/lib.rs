@@ -10,6 +10,10 @@ mod updater;
 pub use updater::Updater;
 #[cfg(feature="updater")]
 mod storage;
+#[cfg(feature="rewriter")]
+mod rewriter;
+#[cfg(feature="rewriter")]
+pub use rewriter::Rewriter;
 #[cfg(any(feature="rewriter",feature="updater"))]
 pub use storage::Storage;
 #[cfg(any(feature="rewriter",feature="updater"))]

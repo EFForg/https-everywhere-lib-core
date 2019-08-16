@@ -7,6 +7,8 @@ use serde_json::Value;
 use crate::strings::ERROR_SERDE_PARSE;
 #[cfg(feature="add_rulesets")]
 use std::collections::HashMap;
+#[cfg(feature="rewriter")]
+use regex::Regex;
 
 
 #[cfg(any(all(test,feature="add_rulesets"),feature="updater"))]
@@ -15,6 +17,11 @@ pub const ENABLE_MIXED_RULESETS: bool = true;
 #[cfg(any(all(test,feature="add_rulesets"),feature="updater"))]
 lazy_static!{
     pub static ref RULE_ACTIVE_STATES: HashMap<String, bool> = HashMap::new();
+}
+
+#[cfg(feature="rewriter")]
+lazy_static!{
+    pub static ref TRIVIAL_REGEX: Regex = Regex::new(r"^http:").unwrap();
 }
 
 
@@ -186,6 +193,34 @@ impl RuleSet {
         }
 
         self.cookierules = Some(cookierules_vec);
+    }
+
+    #[cfg(feature="rewriter")]
+    pub(crate) fn apply(&self, url: &str) -> Option<String> {
+        // If we're covered by an exclusion, return
+        if !self.exclusions.is_none() {
+            let exclusions_regex = Regex::new(&self.exclusions.clone().unwrap()).unwrap();
+            if exclusions_regex.is_match(&url) {
+               debug!("Excluded url: {}", url);
+               return None;
+            }
+        }
+
+        for rule in self.rules.iter() {
+            match rule {
+                Rule::Trivial => {
+                    return Some(TRIVIAL_REGEX.replace_all(url, "https:").to_string());
+                }
+                Rule::NonTrivial(from_regex, to) => {
+                    let from_regex = Regex::new(from_regex).unwrap();
+                    let returl = from_regex.replace_all(url, &to[..]).to_string();
+                    if returl != url {
+                        return Some(returl);
+                    }
+                }
+            }
+        }
+        None
     }
 }
 
@@ -369,7 +404,7 @@ impl RuleSets {
 }
 
 #[cfg(all(test,feature="add_rulesets"))]
-mod tests {
+pub mod tests {
     use super::*;
     use std::fs;
 
@@ -377,7 +412,7 @@ mod tests {
         fs::read_to_string("tests/mock_rulesets.json").unwrap()
     }
 
-    fn add_mock_rulesets(rs: &mut RuleSets) {
+    pub fn add_mock_rulesets(rs: &mut RuleSets) {
         rs.add_all_from_json_string(&mock_rulesets_json(), &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
     }
 
