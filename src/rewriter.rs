@@ -1,4 +1,3 @@
-// TODO: Documentation
 use url::Url;
 use std::error::Error;
 use regex::Regex;
@@ -7,6 +6,8 @@ use crate::{RuleSet, RuleSets, Storage};
 #[cfg(all(test,feature="add_rulesets"))]
 use crate::rulesets::tests as rulesets_tests;
 
+/// A RewriteAction is used to indicate an action to take, returned by the rewrite_url method on
+/// the Rewriter struct
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub enum RewriteAction {
@@ -15,12 +16,20 @@ pub enum RewriteAction {
     RewriteUrl(String),
 }
 
+/// A Rewriter provides an abstraction layer over RuleSets and Storage, providing the logic for
+/// rewriting URLs
 pub struct Rewriter<'a> {
     rulesets: &'a RuleSets,
     storage: &'a Storage,
 }
 
 impl<'a> Rewriter<'a> {
+    /// Returns a rewriter with the rulesets and storage engine specified
+    ///
+    /// # Arguments
+    ///
+    /// * `rulesets` - An instance of RuleSets for rewriting URLs
+    /// * `storage` - A storage object to query current state
     pub fn new(rulesets: &'a RuleSets, storage: &'a Storage) -> Rewriter<'a> {
         Rewriter {
             rulesets,
@@ -28,6 +37,12 @@ impl<'a> Rewriter<'a> {
         }
     }
 
+    /// Return a RewriteAction wrapped in a Result when given a URL.  This action should be
+    /// respected by the implementation using the library
+    ///
+    /// # Arguments
+    ///
+    /// * `url` - A URL to determine the action for
     pub fn rewrite_url(&self, url: &String) -> Result<RewriteAction, Box<dyn Error>> {
         if let Some(false) = self.storage.get_bool(String::from("global_enabled")){
             return Ok(RewriteAction::NoOp);
