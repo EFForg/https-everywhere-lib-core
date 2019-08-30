@@ -20,7 +20,7 @@ pub enum RewriteAction {
 /// rewriting URLs
 pub struct Rewriter<'a> {
     rulesets: &'a RuleSets,
-    storage: &'a Storage,
+    storage: &'a dyn Storage,
 }
 
 impl<'a> Rewriter<'a> {
@@ -30,7 +30,7 @@ impl<'a> Rewriter<'a> {
     ///
     /// * `rulesets` - An instance of RuleSets for rewriting URLs
     /// * `storage` - A storage object to query current state
-    pub fn new(rulesets: &'a RuleSets, storage: &'a Storage) -> Rewriter<'a> {
+    pub fn new(rulesets: &'a RuleSets, storage: &'a dyn Storage) -> Rewriter<'a> {
         Rewriter {
             rulesets,
             storage,
@@ -38,7 +38,7 @@ impl<'a> Rewriter<'a> {
     }
 
     /// Return a RewriteAction wrapped in a Result when given a URL.  This action should be
-    /// respected by the implementation using the library
+    /// ingested by the implementation using the library
     ///
     /// # Arguments
     ///

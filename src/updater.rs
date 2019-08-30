@@ -43,7 +43,7 @@ impl Error for UpdaterError {
 pub struct Updater<'a> {
     rulesets: &'a mut RuleSets,
     update_channels: &'a UpdateChannels,
-    storage: &'a Storage,
+    storage: &'a dyn Storage,
     default_rulesets: Option<String>,
     periodicity: usize,
 }
@@ -60,7 +60,7 @@ impl<'a> Updater<'a> {
     /// * `default_rulesets` - An optional string representing the default rulesets, which may or
     /// may not be replaced by updates
     /// * `periodicity` - The interval to check for new rulesets
-    pub fn new(rulesets: &'a mut RuleSets, update_channels: &'a UpdateChannels, storage: &'a Storage, default_rulesets: Option<String>, periodicity: usize) -> Updater<'a> {
+    pub fn new(rulesets: &'a mut RuleSets, update_channels: &'a UpdateChannels, storage: &'a dyn Storage, default_rulesets: Option<String>, periodicity: usize) -> Updater<'a> {
         Updater {
             rulesets,
             update_channels,

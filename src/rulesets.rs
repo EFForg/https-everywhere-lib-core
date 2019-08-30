@@ -269,7 +269,7 @@ impl RuleSets {
 
         let mut add_one_from_json = |ruleset: Value| {
             if let Value::Object(ruleset) = ruleset {
-                let mut ruleset_name: String;
+                let ruleset_name: String;
                 let mut default_state = true;
                 let mut note = String::new();
 
