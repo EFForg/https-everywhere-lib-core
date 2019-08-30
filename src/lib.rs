@@ -13,7 +13,7 @@ mod storage;
 #[cfg(feature="rewriter")]
 mod rewriter;
 #[cfg(feature="rewriter")]
-pub use rewriter::Rewriter;
+pub use rewriter::{Rewriter, RewriteAction};
 #[cfg(any(feature="rewriter",feature="updater"))]
 pub use storage::Storage;
 #[cfg(any(feature="rewriter",feature="updater"))]
