@@ -145,31 +145,17 @@ impl<'a> Rewriter<'a> {
 #[cfg(all(test,feature="add_rulesets"))]
 mod tests {
     use super::*;
+    use https_everywhere_lib_core_macros::storage_trait_impl;
 
     struct DefaultStorage;
+    #[storage_trait_impl]
     impl Storage for DefaultStorage {
-        fn get_int(&self, _key: String) -> Option<usize> { Some(5) }
-        fn set_int(&self, _key: String, _value: usize) {}
-        fn get_string(&self, _key: String) -> Option<String> { Some(String::from("test")) }
-        fn set_string(&self, _key: String, _value: String) {}
-        fn get_bool(&self, key: String) -> Option<bool> {
-            if key == String::from("http_nowhere_on") {
-                Some(false)
-            } else {
-                Some(true)
-            }
-        }
-        fn set_bool(&self, _key: String, _value: bool) {}
     }
 
     struct HttpNowhereOnStorage;
+    #[storage_trait_impl]
     impl Storage for HttpNowhereOnStorage {
-        fn get_int(&self, _key: String) -> Option<usize> { Some(5) }
-        fn set_int(&self, _key: String, _value: usize) {}
-        fn get_string(&self, _key: String) -> Option<String> { Some(String::from("test")) }
-        fn set_string(&self, _key: String, _value: String) {}
         fn get_bool(&self, _key: String) -> Option<bool> { Some(true) }
-        fn set_bool(&self, _key: String, _value: bool) {}
     }
 
     #[test]
