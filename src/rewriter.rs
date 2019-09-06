@@ -145,16 +145,32 @@ impl<'a> Rewriter<'a> {
 #[cfg(all(test,feature="add_rulesets"))]
 mod tests {
     use super::*;
-    use https_everywhere_lib_core_macros::storage_trait_impl;
+    use multi_default_trait_impl::{default_trait_impl, trait_impl};
 
-    struct DefaultStorage;
-    #[storage_trait_impl]
+    #[default_trait_impl]
     impl Storage for DefaultStorage {
+        fn get_int(&self, _key: String) -> Option<usize> { Some(5) }
+        fn set_int(&self, _key: String, _value: usize) {}
+        fn get_string(&self, _key: String) -> Option<String> { Some(String::from("test")) }
+        fn set_string(&self, _key: String, _value: String) {}
+        fn get_bool(&self, key: String) -> Option<bool> {
+            if key == String::from("http_nowhere_on") {
+                Some(false)
+            } else {
+                Some(true)
+            }
+        }
+        fn set_bool(&self, _key: String, _value: bool) {}
+    }
+
+    struct TestStorage;
+    #[trait_impl]
+    impl DefaultStorage for TestStorage {
     }
 
     struct HttpNowhereOnStorage;
-    #[storage_trait_impl]
-    impl Storage for HttpNowhereOnStorage {
+    #[trait_impl]
+    impl DefaultStorage for HttpNowhereOnStorage {
         fn get_bool(&self, _key: String) -> Option<bool> { Some(true) }
     }
 
@@ -163,7 +179,7 @@ mod tests {
         let mut rs = RuleSets::new();
         rulesets_tests::add_mock_rulesets(&mut rs);
 
-        let rw = Rewriter::new(&rs, &DefaultStorage);
+        let rw = Rewriter::new(&rs, &TestStorage);
 
         assert_eq!(
             rw.rewrite_url(&String::from("http://freerangekitten.com/")).unwrap(),
@@ -203,7 +219,7 @@ mod tests {
         let mut rs = RuleSets::new();
         rulesets_tests::add_mock_rulesets(&mut rs);
 
-        let rw = Rewriter::new(&rs, &DefaultStorage);
+        let rw = Rewriter::new(&rs, &TestStorage);
 
         assert_eq!(
             rw.rewrite_url(&String::from("http://chart.googleapis.com/")).unwrap(),
@@ -219,7 +235,7 @@ mod tests {
         let mut rs = RuleSets::new();
         rulesets_tests::add_mock_rulesets(&mut rs);
 
-        let rw = Rewriter::new(&rs, &DefaultStorage);
+        let rw = Rewriter::new(&rs, &TestStorage);
 
         assert_eq!(
             rw.rewrite_url(&String::from("http://eff:techprojects@chart.googleapis.com/123")).unwrap(),
