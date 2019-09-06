@@ -12,12 +12,17 @@ Description of features follows.
 
 ### `add_rulesets`
 
-Include the ability to add rulesets to a `RuleSets` instance via `RuleSets::add_all_from_json_string`.
+Expose the high-level API for adding rulesets to a `RuleSets` instance via `RuleSets::add_all_from_json_string`.
 
 ### `potentially_applicable`
 
-Include the ability to look up potentially applicable rulesets on a `RuleSets` instance via `RuleSets::potentially_applicable`.
+Expose the high-level API for looking up potentially applicable rulesets on a `RuleSets` instance via `RuleSets::potentially_applicable`.
 
-### `updates`
+### `rewriter`
 
-Expose the structs necessary to update the rulesets dynamically via update channels.
+Expose the high-level API for rewriting URLs
+
+### `updater`
+
+Expose the high-level API for updating the rulesets dynamically via update channels.
+
