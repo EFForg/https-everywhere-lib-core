@@ -20,6 +20,7 @@ pub enum RewriteAction {
 pub struct Rewriter {
     rulesets: Arc<Mutex<RuleSets>>,
     storage: Arc<dyn Storage + Sync + Send>,
+    rewrite_count: Mutex<usize>,
 }
 
 impl Rewriter {
@@ -33,6 +34,7 @@ impl Rewriter {
         Rewriter {
             rulesets,
             storage,
+            rewrite_count: Mutex::new(0),
         }
     }
 
@@ -131,6 +133,7 @@ impl Rewriter {
 
             if let Some(url) = new_url {
                 info!("rewrite_url returning redirect url: {}", url.as_str());
+                *self.rewrite_count.lock().unwrap() += 1;
                 Ok(RewriteAction::RewriteUrl(url.as_str().to_string()))
             } else {
                 Ok(RewriteAction::NoOp)
@@ -138,6 +141,11 @@ impl Rewriter {
         } else {
             Ok(RewriteAction::NoOp)
         }
+    }
+
+    /// Get the number of times a URL has been rewritten with this rewriter
+    pub fn get_rewrite_count(&self) -> usize {
+        *self.rewrite_count.lock().unwrap()
     }
 }
 
@@ -175,17 +183,25 @@ mod tests {
         let s: Arc<dyn Storage + Sync + Send> = Arc::new(HttpNowhereOnStorage);
         let rw = Rewriter::new(rs, s);
 
+        assert_eq!(rw.get_rewrite_count(), 0);
+
         assert_eq!(
             rw.rewrite_url(&String::from("http://freerangekitten.com/")).unwrap(),
             RewriteAction::RewriteUrl(String::from("https://freerangekitten.com/")));
+
+        assert_eq!(rw.get_rewrite_count(), 1);
 
         assert_eq!(
             rw.rewrite_url(&String::from("http://fake-example.com/")).unwrap(),
             RewriteAction::CancelRequest);
 
+        assert_eq!(rw.get_rewrite_count(), 1);
+
         assert_eq!(
             rw.rewrite_url(&String::from("http://fake-example.onion/")).unwrap(),
             RewriteAction::NoOp);
+
+        assert_eq!(rw.get_rewrite_count(), 1);
 
         assert_eq!(
             rw.rewrite_url(&String::from("http://fake-example.onion..../")).unwrap(),
