@@ -309,7 +309,23 @@ mod tests {
     use super::*;
     use std::{fs, thread};
     use crate::rulesets::tests as rulesets_tests;
-    use crate::storage::tests::TestStorage;
+    use crate::storage::tests::{TestStorage, WorkingTempStorage};
+
+    #[test]
+    fn updates_correctly() {
+        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(WorkingTempStorage::new()));
+        let rs = Arc::new(Mutex::new(RuleSets::new()));
+        let rs2 = Arc::clone(&rs);
+        assert_eq!(rs2.lock().unwrap().count_targets(), 0);
+
+        let update_channels_string = fs::read_to_string("tests/update_channels.json").unwrap();
+        let ucs = UpdateChannels::from(&update_channels_string);
+
+        let mut updater = Updater::new(rs, &ucs, s, None, 15);
+        updater.perform_check();
+
+        assert!(rs2.lock().unwrap().count_targets() > 0);
+    }
 
     #[test]
     fn is_threadsafe() {

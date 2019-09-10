@@ -15,6 +15,7 @@ pub trait Storage {
 
 #[cfg(test)]
 pub mod tests {
+    use std::collections::HashMap;
     use super::*;
     use multi_default_trait_impl::{default_trait_impl, trait_impl};
 
@@ -43,5 +44,56 @@ pub mod tests {
     #[trait_impl]
     impl DefaultStorage for HttpNowhereOnStorage {
         fn get_bool(&self, _key: String) -> Option<bool> { Some(true) }
+    }
+
+    pub struct WorkingTempStorage {
+        ints: HashMap<String, usize>,
+        bools: HashMap<String, bool>,
+        strings: HashMap<String, String>,
+    }
+
+    impl WorkingTempStorage {
+        pub fn new() -> WorkingTempStorage {
+            WorkingTempStorage {
+                ints: HashMap::new(),
+                bools: HashMap::new(),
+                strings: HashMap::new(),
+            }
+        }
+    }
+
+    impl Storage for WorkingTempStorage {
+        fn get_int(&self, key: String) -> Option<usize> {
+            match self.ints.get(&key) {
+                Some(value) => Some(value.clone()),
+                None => None
+            }
+        }
+
+        fn get_bool(&self, key: String) -> Option<bool> {
+            match self.bools.get(&key) {
+                Some(value) => Some(value.clone()),
+                None => None
+            }
+        }
+
+        fn get_string(&self, key: String) -> Option<String> {
+            match self.strings.get(&key) {
+                Some(value) => Some(value.clone()),
+                None => None
+            }
+        }
+
+        fn set_int(&mut self, key: String, value: usize) {
+            self.ints.insert(key, value);
+        }
+
+        fn set_bool(&mut self, key: String, value: bool) {
+            self.bools.insert(key, value);
+        }
+
+        fn set_string(&mut self, key: String, value: String) {
+            self.strings.insert(key, value);
+        }
     }
 }
