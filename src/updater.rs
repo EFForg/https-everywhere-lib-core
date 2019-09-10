@@ -14,6 +14,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 type Timestamp = usize;
+type ThreadSafeRuleSets = Arc<Mutex<RuleSets>>;
+type ThreadSafeStorage = Arc<Mutex<dyn Storage + Sync + Send>>;
 
 #[derive(Debug, Clone)]
 struct UpdaterError {
@@ -42,9 +44,9 @@ impl Error for UpdaterError {
 
 
 pub struct Updater<'a> {
-    rulesets: Arc<Mutex<RuleSets>>,
+    rulesets: ThreadSafeRuleSets,
     update_channels: &'a UpdateChannels,
-    storage: Arc<Mutex<dyn Storage + Sync + Send>>,
+    storage: ThreadSafeStorage,
     default_rulesets: Option<String>,
     periodicity: usize,
 }
@@ -61,7 +63,7 @@ impl<'a> Updater<'a> {
     /// * `default_rulesets` - An optional string representing the default rulesets, which may or
     /// may not be replaced by updates
     /// * `periodicity` - The interval to check for new rulesets
-    pub fn new(rulesets: Arc<Mutex<RuleSets>>, update_channels: &'a UpdateChannels, storage: Arc<Mutex<dyn Storage + Sync + Send>>, default_rulesets: Option<String>, periodicity: usize) -> Updater<'a> {
+    pub fn new(rulesets: ThreadSafeRuleSets, update_channels: &'a UpdateChannels, storage: ThreadSafeStorage, default_rulesets: Option<String>, periodicity: usize) -> Updater<'a> {
         Updater {
             rulesets,
             update_channels,
@@ -313,7 +315,7 @@ mod tests {
 
     #[test]
     fn updates_correctly() {
-        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(WorkingTempStorage::new()));
+        let s: ThreadSafeStorage = Arc::new(Mutex::new(WorkingTempStorage::new()));
         let rs = Arc::new(Mutex::new(RuleSets::new()));
         let rs2 = Arc::clone(&rs);
         assert_eq!(rs2.lock().unwrap().count_targets(), 0);
@@ -329,7 +331,7 @@ mod tests {
 
     #[test]
     fn is_threadsafe() {
-        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
 
         let mut rs = RuleSets::new();
         rulesets_tests::add_mock_rulesets(&mut rs);

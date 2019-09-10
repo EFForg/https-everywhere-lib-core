@@ -5,6 +5,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::{RuleSet, RuleSets, Storage};
 
+type ThreadSafeRuleSets = Arc<Mutex<RuleSets>>;
+type ThreadSafeStorage = Arc<Mutex<dyn Storage + Sync + Send>>;
+
 /// A RewriteAction is used to indicate an action to take, returned by the rewrite_url method on
 /// the Rewriter struct
 #[derive(Debug)]
@@ -18,8 +21,8 @@ pub enum RewriteAction {
 /// A Rewriter provides an abstraction layer over RuleSets and Storage, providing the logic for
 /// rewriting URLs
 pub struct Rewriter {
-    rulesets: Arc<Mutex<RuleSets>>,
-    storage: Arc<Mutex<dyn Storage + Sync + Send>>,
+    rulesets: ThreadSafeRuleSets,
+    storage: ThreadSafeStorage,
     rewrite_count: Mutex<usize>,
 }
 
@@ -30,7 +33,7 @@ impl Rewriter {
     ///
     /// * `rulesets` - An instance of RuleSets for rewriting URLs, wrapped in an Arc<Mutex>
     /// * `storage` - A storage object to query current state, wrapped in an Arc<Mutex>
-    pub fn new(rulesets: Arc<Mutex<RuleSets>>, storage: Arc<Mutex<dyn Storage + Sync + Send>>) -> Rewriter {
+    pub fn new(rulesets: ThreadSafeRuleSets, storage: ThreadSafeStorage) -> Rewriter {
         Rewriter {
             rulesets,
             storage,
@@ -162,7 +165,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
         let rw = Rewriter::new(rs, s);
 
         assert_eq!(
@@ -180,7 +183,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(HttpNowhereOnStorage));
+        let s: ThreadSafeStorage = Arc::new(Mutex::new(HttpNowhereOnStorage));
         let rw = Rewriter::new(rs, s);
 
         assert_eq!(rw.get_rewrite_count(), 0);
@@ -214,7 +217,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
         let rw = Rewriter::new(rs, s);
 
         assert_eq!(
@@ -232,7 +235,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
         let rw = Rewriter::new(rs, s);
 
         assert_eq!(
@@ -246,7 +249,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
 
         let t = thread::spawn(move || {
             let rw = Rewriter::new(rs, s);
