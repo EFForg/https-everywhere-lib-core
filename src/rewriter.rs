@@ -1,10 +1,9 @@
 use url::Url;
 use std::error::Error;
 use regex::Regex;
+use std::sync::{Arc, Mutex};
 
 use crate::{RuleSet, RuleSets, Storage};
-#[cfg(all(test,feature="add_rulesets"))]
-use crate::rulesets::tests as rulesets_tests;
 
 /// A RewriteAction is used to indicate an action to take, returned by the rewrite_url method on
 /// the Rewriter struct
@@ -18,19 +17,19 @@ pub enum RewriteAction {
 
 /// A Rewriter provides an abstraction layer over RuleSets and Storage, providing the logic for
 /// rewriting URLs
-pub struct Rewriter<'a> {
-    rulesets: &'a RuleSets,
-    storage: &'a dyn Storage,
+pub struct Rewriter {
+    rulesets: Arc<Mutex<RuleSets>>,
+    storage: Arc<dyn Storage + Sync + Send>,
 }
 
-impl<'a> Rewriter<'a> {
+impl Rewriter {
     /// Returns a rewriter with the rulesets and storage engine specified
     ///
     /// # Arguments
     ///
     /// * `rulesets` - An instance of RuleSets for rewriting URLs
-    /// * `storage` - A storage object to query current state
-    pub fn new(rulesets: &'a RuleSets, storage: &'a dyn Storage) -> Rewriter<'a> {
+    /// * `storage` - A storage object to query current state, wrapped in an Arc
+    pub fn new(rulesets: Arc<Mutex<RuleSets>>, storage: Arc<dyn Storage + Sync + Send>) -> Rewriter {
         Rewriter {
             rulesets,
             storage,
@@ -90,7 +89,7 @@ impl<'a> Rewriter<'a> {
             };
 
 
-            for ruleset in self.rulesets.potentially_applicable(&hostname) {
+            for ruleset in self.rulesets.lock().unwrap().potentially_applicable(&hostname) {
                 if let Some(scope) = (*ruleset.scope).clone() {
                     let scope_regex = Regex::new(&scope).unwrap();
                     if scope_regex.is_match(url.as_str()) {
@@ -145,41 +144,18 @@ impl<'a> Rewriter<'a> {
 #[cfg(all(test,feature="add_rulesets"))]
 mod tests {
     use super::*;
-    use multi_default_trait_impl::{default_trait_impl, trait_impl};
-
-    #[default_trait_impl]
-    impl Storage for DefaultStorage {
-        fn get_int(&self, _key: String) -> Option<usize> { Some(5) }
-        fn set_int(&self, _key: String, _value: usize) {}
-        fn get_string(&self, _key: String) -> Option<String> { Some(String::from("test")) }
-        fn set_string(&self, _key: String, _value: String) {}
-        fn get_bool(&self, key: String) -> Option<bool> {
-            if key == String::from("http_nowhere_on") {
-                Some(false)
-            } else {
-                Some(true)
-            }
-        }
-        fn set_bool(&self, _key: String, _value: bool) {}
-    }
-
-    struct TestStorage;
-    #[trait_impl]
-    impl DefaultStorage for TestStorage {
-    }
-
-    struct HttpNowhereOnStorage;
-    #[trait_impl]
-    impl DefaultStorage for HttpNowhereOnStorage {
-        fn get_bool(&self, _key: String) -> Option<bool> { Some(true) }
-    }
+    use std::{panic, thread};
+    use crate::storage::tests::{TestStorage, HttpNowhereOnStorage};
+    use crate::rulesets::tests as rulesets_tests;
 
     #[test]
     fn rewrite_url() {
         let mut rs = RuleSets::new();
         rulesets_tests::add_mock_rulesets(&mut rs);
+        let rs = Arc::new(Mutex::new(rs));
 
-        let rw = Rewriter::new(&rs, &TestStorage);
+        let s: Arc<dyn Storage + Sync + Send> = Arc::new(TestStorage);
+        let rw = Rewriter::new(rs, s);
 
         assert_eq!(
             rw.rewrite_url(&String::from("http://freerangekitten.com/")).unwrap(),
@@ -194,8 +170,10 @@ mod tests {
     fn rewrite_url_http_nowhere_on() {
         let mut rs = RuleSets::new();
         rulesets_tests::add_mock_rulesets(&mut rs);
+        let rs = Arc::new(Mutex::new(rs));
 
-        let rw = Rewriter::new(&rs, &HttpNowhereOnStorage);
+        let s: Arc<dyn Storage + Sync + Send> = Arc::new(HttpNowhereOnStorage);
+        let rw = Rewriter::new(rs, s);
 
         assert_eq!(
             rw.rewrite_url(&String::from("http://freerangekitten.com/")).unwrap(),
@@ -218,8 +196,10 @@ mod tests {
     fn rewrite_exclusions() {
         let mut rs = RuleSets::new();
         rulesets_tests::add_mock_rulesets(&mut rs);
+        let rs = Arc::new(Mutex::new(rs));
 
-        let rw = Rewriter::new(&rs, &TestStorage);
+        let s: Arc<dyn Storage + Sync + Send> = Arc::new(TestStorage);
+        let rw = Rewriter::new(rs, s);
 
         assert_eq!(
             rw.rewrite_url(&String::from("http://chart.googleapis.com/")).unwrap(),
@@ -234,11 +214,29 @@ mod tests {
     fn rewrite_with_credentials() {
         let mut rs = RuleSets::new();
         rulesets_tests::add_mock_rulesets(&mut rs);
+        let rs = Arc::new(Mutex::new(rs));
 
-        let rw = Rewriter::new(&rs, &TestStorage);
+        let s: Arc<dyn Storage + Sync + Send> = Arc::new(TestStorage);
+        let rw = Rewriter::new(rs, s);
 
         assert_eq!(
             rw.rewrite_url(&String::from("http://eff:techprojects@chart.googleapis.com/123")).unwrap(),
             RewriteAction::RewriteUrl(String::from("https://eff:techprojects@chart.googleapis.com/123")));
+    }
+
+    #[test]
+    fn is_threadsafe() {
+        let mut rs = RuleSets::new();
+        rulesets_tests::add_mock_rulesets(&mut rs);
+        let rs = Arc::new(Mutex::new(rs));
+
+        let s: Arc<dyn Storage + Sync + Send> = Arc::new(TestStorage);
+
+        let t = thread::spawn(move || {
+            let rw = Rewriter::new(rs, s);
+            let _ = Box::new(rw);
+        });
+
+        assert!(t.join().is_ok());
     }
 }

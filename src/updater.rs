@@ -10,6 +10,7 @@ use std::cmp;
 use std::error::Error;
 use std::fmt;
 use std::io::Read;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 type Timestamp = usize;
@@ -41,9 +42,9 @@ impl Error for UpdaterError {
 
 
 pub struct Updater<'a> {
-    rulesets: &'a mut RuleSets,
+    rulesets: Arc<Mutex<RuleSets>>,
     update_channels: &'a UpdateChannels,
-    storage: &'a dyn Storage,
+    storage: Arc<dyn Storage + Sync + Send>,
     default_rulesets: Option<String>,
     periodicity: usize,
 }
@@ -54,13 +55,13 @@ impl<'a> Updater<'a> {
     ///
     /// # Arguments
     ///
-    /// * `rulesets` - A ruleset struct to update
+    /// * `rulesets` - A ruleset struct to update, wrapped in an Arc<Mutex>
     /// * `update_channels` - The update channels where to look for new rulesets
-    /// * `storage` - The storage engine for key-value pairs
+    /// * `storage` - The storage engine for key-value pairs, wrapped in an Arc
     /// * `default_rulesets` - An optional string representing the default rulesets, which may or
     /// may not be replaced by updates
     /// * `periodicity` - The interval to check for new rulesets
-    pub fn new(rulesets: &'a mut RuleSets, update_channels: &'a UpdateChannels, storage: &'a dyn Storage, default_rulesets: Option<String>, periodicity: usize) -> Updater<'a> {
+    pub fn new(rulesets: Arc<Mutex<RuleSets>>, update_channels: &'a UpdateChannels, storage: Arc<dyn Storage + Sync + Send>, default_rulesets: Option<String>, periodicity: usize) -> Updater<'a> {
         Updater {
             rulesets,
             update_channels,
@@ -269,13 +270,15 @@ impl<'a> Updater<'a> {
             }
         });
 
-        self.rulesets.clear();
+        let mut rs = self.rulesets.lock().unwrap();
+        rs.clear();
+
         for rt in rulesets_tuples {
-            self.rulesets.add_all_from_serde_value(rt.0, &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &rt.1);
+            rs.add_all_from_serde_value(rt.0, &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &rt.1);
         }
 
         if !replaces && !self.default_rulesets.is_none() {
-            self.rulesets.add_all_from_json_string(&self.default_rulesets.clone().unwrap(), &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
+            rs.add_all_from_json_string(&self.default_rulesets.clone().unwrap(), &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
         }
     }
 
@@ -298,5 +301,32 @@ impl<'a> Updater<'a> {
                 self.storage.set_string(format!("rulesets: {}", &uc.name), String::from(""));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{fs, thread};
+    use crate::rulesets::tests as rulesets_tests;
+    use crate::storage::tests::TestStorage;
+
+    #[test]
+    fn is_threadsafe() {
+        let s: Arc<dyn Storage + Sync + Send> = Arc::new(TestStorage);
+
+        let mut rs = RuleSets::new();
+        rulesets_tests::add_mock_rulesets(&mut rs);
+        let rs = Arc::new(Mutex::new(rs));
+
+        let update_channels_string = fs::read_to_string("tests/update_channels.json").unwrap();
+        let ucs = UpdateChannels::from(&update_channels_string);
+
+        let t = thread::spawn(move || {
+            let updater = Updater::new(rs, &ucs, s, None, 15);
+            updater.time_to_next_check();
+        });
+
+        assert!(t.join().is_ok());
     }
 }

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 use std::collections::BTreeMap;
 
 #[cfg(feature="add_rulesets")]
@@ -116,7 +116,7 @@ pub struct RuleSet {
     pub cookierules: Option<Vec<CookieRule>>,
     pub active: bool,
     pub default_state: bool,
-    pub scope: Rc<Option<String>>, // RegExp
+    pub scope: Arc<Option<String>>, // RegExp
     pub note: Option<String>
 }
 
@@ -128,7 +128,7 @@ impl RuleSet {
     ///
     /// * `name` - A string that holds the name of the ruleset
     /// * `scope` - An optional string slice specifying the scope of the ruleset
-    pub fn new(name: String, scope: Rc<Option<String>>) -> RuleSet {
+    pub fn new(name: String, scope: Arc<Option<String>>) -> RuleSet {
         RuleSet {
             name,
             rules: vec![],
@@ -227,7 +227,7 @@ impl RuleSet {
 
 /// RuleSets consists of a tuple btreemap of rulesets, keyed by some target FQDN
 #[derive(Debug)]
-pub struct RuleSets(pub BTreeMap<String, Vec<Rc<RuleSet>>>);
+pub struct RuleSets(pub BTreeMap<String, Vec<Arc<RuleSet>>>);
 
 impl RuleSets {
 
@@ -265,7 +265,7 @@ impl RuleSets {
 
     #[cfg(feature="add_rulesets")]
     pub fn add_all_from_serde_value(&mut self, rulesets: Value, enable_mixed_rulesets: &bool, ruleset_active_states: &HashMap<String, bool>, scope: &Option<String>) {
-        let scope: Rc<Option<String>> = Rc::new(scope.clone());
+        let scope: Arc<Option<String>> = Arc::new(scope.clone());
 
         let mut add_one_from_json = |ruleset: Value| {
             if let Value::Object(ruleset) = ruleset {
@@ -305,7 +305,7 @@ impl RuleSets {
                         _ => {}
                     }
 
-                    let mut rs = RuleSet::new(ruleset_name, Rc::clone(&scope));
+                    let mut rs = RuleSet::new(ruleset_name, Arc::clone(&scope));
                     rs.default_state = default_state;
                     rs.note = match note.len() {
                         0 => None,
@@ -326,16 +326,16 @@ impl RuleSets {
                         rs.add_cookierules(securecookies);
                     }
 
-                    let rs_rc = Rc::new(rs);
+                    let rs_rc = Arc::new(rs);
                     if let Some(Value::Array(targets)) = ruleset.get(JSON_STRINGS.target) {
                         for target in targets {
                             if let Value::String(target) = target {
                                 match self.0.get_mut(target) {
                                     Some(rs_vec) => {
-                                        rs_vec.push(Rc::clone(&rs_rc));
+                                        rs_vec.push(Arc::clone(&rs_rc));
                                     },
                                     None => {
-                                        self.0.insert(target.to_string(), vec![Rc::clone(&rs_rc)]);
+                                        self.0.insert(target.to_string(), vec![Arc::clone(&rs_rc)]);
                                     }
                                 }
                             }
@@ -358,7 +358,7 @@ impl RuleSets {
     ///
     /// * `host` - A string which indicates the host to search for potentially applicable rulesets
     #[cfg(feature="potentially_applicable")]
-    pub fn potentially_applicable(&self, host: &String) -> Vec<Rc<RuleSet>> {
+    pub fn potentially_applicable(&self, host: &String) -> Vec<Arc<RuleSet>> {
         let mut results = vec![];
 
         self.try_add(&mut results, host);
@@ -392,11 +392,11 @@ impl RuleSets {
     }
 
     #[cfg(feature="potentially_applicable")]
-    fn try_add(&self, results: &mut Vec<Rc<RuleSet>>, host: &String) {
+    fn try_add(&self, results: &mut Vec<Arc<RuleSet>>, host: &String) {
         if self.0.contains_key(host) {
             if let Some(rulesets) = self.0.get(host) {
                 for ruleset in rulesets {
-                    results.push(Rc::clone(ruleset));
+                    results.push(Arc::clone(ruleset));
                 }
             }
         }
@@ -406,7 +406,7 @@ impl RuleSets {
 #[cfg(all(test,feature="add_rulesets"))]
 pub mod tests {
     use super::*;
-    use std::fs;
+    use std::{fs, thread};
 
     fn mock_rulesets_json() -> String {
         fs::read_to_string("tests/mock_rulesets.json").unwrap()
@@ -457,5 +457,16 @@ pub mod tests {
         add_mock_rulesets(&mut rs);
 
         assert_eq!(rs.potentially_applicable(&String::from("nonmatch.example.com")).len(), 0);
+    }
+
+    #[test]
+    fn is_threadsafe() {
+        let mut rs = RuleSets::new();
+
+        let t = thread::spawn(move || {
+            add_mock_rulesets(&mut rs);
+        });
+
+        assert!(t.join().is_ok());
     }
 }
