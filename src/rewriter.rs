@@ -19,7 +19,7 @@ pub enum RewriteAction {
 /// rewriting URLs
 pub struct Rewriter {
     rulesets: Arc<Mutex<RuleSets>>,
-    storage: Arc<dyn Storage + Sync + Send>,
+    storage: Arc<Mutex<dyn Storage + Sync + Send>>,
     rewrite_count: Mutex<usize>,
 }
 
@@ -28,9 +28,9 @@ impl Rewriter {
     ///
     /// # Arguments
     ///
-    /// * `rulesets` - An instance of RuleSets for rewriting URLs
-    /// * `storage` - A storage object to query current state, wrapped in an Arc
-    pub fn new(rulesets: Arc<Mutex<RuleSets>>, storage: Arc<dyn Storage + Sync + Send>) -> Rewriter {
+    /// * `rulesets` - An instance of RuleSets for rewriting URLs, wrapped in an Arc<Mutex>
+    /// * `storage` - A storage object to query current state, wrapped in an Arc<Mutex>
+    pub fn new(rulesets: Arc<Mutex<RuleSets>>, storage: Arc<Mutex<dyn Storage + Sync + Send>>) -> Rewriter {
         Rewriter {
             rulesets,
             storage,
@@ -45,7 +45,7 @@ impl Rewriter {
     ///
     /// * `url` - A URL to determine the action for
     pub fn rewrite_url(&self, url: &String) -> Result<RewriteAction, Box<dyn Error>> {
-        if let Some(false) = self.storage.get_bool(String::from("global_enabled")){
+        if let Some(false) = self.storage.lock().unwrap().get_bool(String::from("global_enabled")){
             return Ok(RewriteAction::NoOp);
         }
 
@@ -58,7 +58,7 @@ impl Rewriter {
             let hostname = hostname.to_string();
 
             let mut should_cancel = false;
-            let http_nowhere_on = self.storage.get_bool(String::from("http_nowhere_on"));
+            let http_nowhere_on = self.storage.lock().unwrap().get_bool(String::from("http_nowhere_on"));
             if let Some(true) = http_nowhere_on {
                 if url.scheme() == "http" || url.scheme() == "ftp" {
                     let num_localhost = Regex::new(r"^127(\.[0-9]{1,3}){3}$").unwrap();
@@ -162,7 +162,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: Arc<dyn Storage + Sync + Send> = Arc::new(TestStorage);
+        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(TestStorage));
         let rw = Rewriter::new(rs, s);
 
         assert_eq!(
@@ -180,7 +180,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: Arc<dyn Storage + Sync + Send> = Arc::new(HttpNowhereOnStorage);
+        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(HttpNowhereOnStorage));
         let rw = Rewriter::new(rs, s);
 
         assert_eq!(rw.get_rewrite_count(), 0);
@@ -214,7 +214,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: Arc<dyn Storage + Sync + Send> = Arc::new(TestStorage);
+        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(TestStorage));
         let rw = Rewriter::new(rs, s);
 
         assert_eq!(
@@ -232,7 +232,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: Arc<dyn Storage + Sync + Send> = Arc::new(TestStorage);
+        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(TestStorage));
         let rw = Rewriter::new(rs, s);
 
         assert_eq!(
@@ -246,7 +246,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: Arc<dyn Storage + Sync + Send> = Arc::new(TestStorage);
+        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(TestStorage));
 
         let t = thread::spawn(move || {
             let rw = Rewriter::new(rs, s);

@@ -44,7 +44,7 @@ impl Error for UpdaterError {
 pub struct Updater<'a> {
     rulesets: Arc<Mutex<RuleSets>>,
     update_channels: &'a UpdateChannels,
-    storage: Arc<dyn Storage + Sync + Send>,
+    storage: Arc<Mutex<dyn Storage + Sync + Send>>,
     default_rulesets: Option<String>,
     periodicity: usize,
 }
@@ -57,11 +57,11 @@ impl<'a> Updater<'a> {
     ///
     /// * `rulesets` - A ruleset struct to update, wrapped in an Arc<Mutex>
     /// * `update_channels` - The update channels where to look for new rulesets
-    /// * `storage` - The storage engine for key-value pairs, wrapped in an Arc
+    /// * `storage` - The storage engine for key-value pairs, wrapped in an Arc<Mutex>
     /// * `default_rulesets` - An optional string representing the default rulesets, which may or
     /// may not be replaced by updates
     /// * `periodicity` - The interval to check for new rulesets
-    pub fn new(rulesets: Arc<Mutex<RuleSets>>, update_channels: &'a UpdateChannels, storage: Arc<dyn Storage + Sync + Send>, default_rulesets: Option<String>, periodicity: usize) -> Updater<'a> {
+    pub fn new(rulesets: Arc<Mutex<RuleSets>>, update_channels: &'a UpdateChannels, storage: Arc<Mutex<dyn Storage + Sync + Send>>, default_rulesets: Option<String>, periodicity: usize) -> Updater<'a> {
         Updater {
             rulesets,
             update_channels,
@@ -103,7 +103,7 @@ impl<'a> Updater<'a> {
                 Err(_) => return None
             };
 
-            let stored_timestamp: Timestamp = self.storage.get_int(format!("rulesets-timestamp: {}", &uc.name)).unwrap_or(0);
+            let stored_timestamp: Timestamp = self.storage.lock().unwrap().get_int(format!("rulesets-timestamp: {}", &uc.name)).unwrap_or(0);
 
             if stored_timestamp < timestamp {
                 Some(timestamp)
@@ -122,8 +122,8 @@ impl<'a> Updater<'a> {
     ///
     /// * `rulesets_timestamp` - The timestamp for the rulesets
     /// * `update_channel` - The update channel to download rulesets for
-    fn get_new_rulesets(&self, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(Vec<u8>, Vec<u8>), Box<dyn Error>> {
-        self.storage.set_int(format!("rulesets-timestamp: {}", &update_channel.name), rulesets_timestamp);
+    fn get_new_rulesets(&mut self, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(Vec<u8>, Vec<u8>), Box<dyn Error>> {
+        self.storage.lock().unwrap().set_int(format!("rulesets-timestamp: {}", &update_channel.name), rulesets_timestamp);
 
         // TODO: Use futures to asynchronously fetch signature and rulesets
 
@@ -182,7 +182,7 @@ impl<'a> Updater<'a> {
                 }
             }
 
-            self.storage.set_string(format!("rulesets: {}", update_channel.name), rulesets_json_string);
+            self.storage.lock().unwrap().set_string(format!("rulesets: {}", update_channel.name), rulesets_json_string);
         } else {
             return Err(Box::new(UpdaterError::new(format!("{}: Downloaded ruleset signature is invalid.  Aborting.", &update_channel.name))));
         }
@@ -200,9 +200,9 @@ impl<'a> Updater<'a> {
     pub fn perform_check(&mut self) {
         info!("Checking for new rulesets.");
 
-	self.storage.set_int(String::from("last-checked"), Self::current_timestamp());
+	self.storage.lock().unwrap().set_int(String::from("last-checked"), Self::current_timestamp());
 
-	let extension_timestamp = self.storage.get_int(String::from("extension-timestamp")).unwrap_or(0);
+	let extension_timestamp = self.storage.lock().unwrap().get_int(String::from("extension-timestamp")).unwrap_or(0);
 
         let mut some_updated = false;
         for uc in self.update_channels.get_all() {
@@ -226,7 +226,7 @@ impl<'a> Updater<'a> {
                     continue;
                 }
 
-                self.storage.set_int(format!("rulesets-stored-timestamp: {}", uc.name), new_rulesets_timestamp);
+                self.storage.lock().unwrap().set_int(format!("rulesets-stored-timestamp: {}", uc.name), new_rulesets_timestamp);
                 some_updated = true;
             } else {
                 info!("{}: No new ruleset bundle discovered.", uc.name);
@@ -244,7 +244,7 @@ impl<'a> Updater<'a> {
 
         // TODO: Use futures to asynchronously apply stored rulesets
         let rulesets_closure = |uc: &UpdateChannel| -> Result<OkResult, Box<dyn Error>> {
-            match self.storage.get_string(format!("rulesets: {}", &uc.name)) {
+            match self.storage.lock().unwrap().get_string(format!("rulesets: {}", &uc.name)) {
                 Some(rulesets_json_string) => {
                     info!("{}: Applying stored rulesets.", &uc.name);
 
@@ -284,7 +284,7 @@ impl<'a> Updater<'a> {
 
     /// Return the time until we should check for new rulesets, in seconds
     pub fn time_to_next_check(&self) -> usize {
-        let last_checked = self.storage.get_int(String::from("last-checked")).unwrap_or(0);
+        let last_checked = self.storage.lock().unwrap().get_int(String::from("last-checked")).unwrap_or(0);
         let current_timestamp = Self::current_timestamp();
         let secs_since_last_checked = current_timestamp - last_checked;
         cmp::max(0, self.periodicity as isize - secs_since_last_checked as isize) as usize
@@ -296,9 +296,9 @@ impl<'a> Updater<'a> {
     pub fn clear_replacement_update_channels(&self) {
         for uc in self.update_channels.get_all() {
             if uc.replaces_default_rulesets {
-                self.storage.set_int(format!("rulesets-timestamp: {}", &uc.name), 0);
-                self.storage.set_int(format!("rulesets-stored-timestamp: {}", &uc.name), 0);
-                self.storage.set_string(format!("rulesets: {}", &uc.name), String::from(""));
+                self.storage.lock().unwrap().set_int(format!("rulesets-timestamp: {}", &uc.name), 0);
+                self.storage.lock().unwrap().set_int(format!("rulesets-stored-timestamp: {}", &uc.name), 0);
+                self.storage.lock().unwrap().set_string(format!("rulesets: {}", &uc.name), String::from(""));
             }
         }
     }
@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn is_threadsafe() {
-        let s: Arc<dyn Storage + Sync + Send> = Arc::new(TestStorage);
+        let s: Arc<Mutex<dyn Storage + Sync + Send>> = Arc::new(Mutex::new(TestStorage));
 
         let mut rs = RuleSets::new();
         rulesets_tests::add_mock_rulesets(&mut rs);
