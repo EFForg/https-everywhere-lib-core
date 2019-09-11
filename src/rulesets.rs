@@ -10,18 +10,22 @@ use std::collections::HashMap;
 #[cfg(feature="rewriter")]
 use regex::Regex;
 
+#[cfg(any(feature="rewriter",feature="updater"))]
+use std::sync::Mutex;
+#[cfg(any(feature="rewriter",feature="updater"))]
+pub type ThreadSafeRuleSets = Arc<Mutex<RuleSets>>;
 
 #[cfg(any(all(test,feature="add_rulesets"),feature="updater"))]
-pub const ENABLE_MIXED_RULESETS: bool = true;
+pub(crate) const ENABLE_MIXED_RULESETS: bool = true;
 
 #[cfg(any(all(test,feature="add_rulesets"),feature="updater"))]
 lazy_static!{
-    pub static ref RULE_ACTIVE_STATES: HashMap<String, bool> = HashMap::new();
+    pub(crate) static ref RULE_ACTIVE_STATES: HashMap<String, bool> = HashMap::new();
 }
 
 #[cfg(feature="rewriter")]
 lazy_static!{
-    pub static ref TRIVIAL_REGEX: Regex = Regex::new(r"^http:").unwrap();
+    pub(crate) static ref TRIVIAL_REGEX: Regex = Regex::new(r"^http:").unwrap();
 }
 
 

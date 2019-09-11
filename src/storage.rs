@@ -13,87 +13,101 @@ pub trait Storage {
     fn set_bool(&mut self, key: String, value: bool);
 }
 
+use std::sync::{Arc, Mutex};
+pub type ThreadSafeStorage = Arc<Mutex<dyn Storage + Sync + Send>>;
+
 #[cfg(test)]
 pub mod tests {
-    use std::collections::HashMap;
-    use super::*;
-    use multi_default_trait_impl::{default_trait_impl, trait_impl};
 
-    #[default_trait_impl]
-    impl Storage for DefaultStorage {
-        fn get_int(&self, _key: String) -> Option<usize> { Some(5) }
-        fn set_int(&mut self, _key: String, _value: usize) {}
-        fn get_string(&self, _key: String) -> Option<String> { Some(String::from("test")) }
-        fn set_string(&mut self, _key: String, _value: String) {}
-        fn get_bool(&self, key: String) -> Option<bool> {
-            if key == String::from("http_nowhere_on") {
-                Some(false)
-            } else {
-                Some(true)
+    #[cfg(feature="add_rulesets")]
+    pub mod mock_storage {
+        use super::super::*;
+        use multi_default_trait_impl::{default_trait_impl, trait_impl};
+
+        #[default_trait_impl]
+        impl Storage for DefaultStorage {
+            fn get_int(&self, _key: String) -> Option<usize> { Some(5) }
+            fn set_int(&mut self, _key: String, _value: usize) {}
+            fn get_string(&self, _key: String) -> Option<String> { Some(String::from("test")) }
+            fn set_string(&mut self, _key: String, _value: String) {}
+            fn get_bool(&self, key: String) -> Option<bool> {
+                if key == String::from("http_nowhere_on") {
+                    Some(false)
+                } else {
+                    Some(true)
+                }
             }
+            fn set_bool(&mut self, _key: String, _value: bool) {}
         }
-        fn set_bool(&mut self, _key: String, _value: bool) {}
-    }
 
-    pub struct TestStorage;
-    #[trait_impl]
-    impl DefaultStorage for TestStorage {
-    }
+        pub struct TestStorage;
+        #[trait_impl]
+        impl DefaultStorage for TestStorage {
+        }
 
-    pub struct HttpNowhereOnStorage;
-    #[trait_impl]
-    impl DefaultStorage for HttpNowhereOnStorage {
-        fn get_bool(&self, _key: String) -> Option<bool> { Some(true) }
-    }
-
-    pub struct WorkingTempStorage {
-        ints: HashMap<String, usize>,
-        bools: HashMap<String, bool>,
-        strings: HashMap<String, String>,
-    }
-
-    impl WorkingTempStorage {
-        pub fn new() -> WorkingTempStorage {
-            WorkingTempStorage {
-                ints: HashMap::new(),
-                bools: HashMap::new(),
-                strings: HashMap::new(),
-            }
+        #[cfg(feature="rewriter")]
+        pub struct HttpNowhereOnStorage;
+        #[cfg(feature="rewriter")]
+        #[trait_impl]
+        impl DefaultStorage for HttpNowhereOnStorage {
+            fn get_bool(&self, _key: String) -> Option<bool> { Some(true) }
         }
     }
 
-    impl Storage for WorkingTempStorage {
-        fn get_int(&self, key: String) -> Option<usize> {
-            match self.ints.get(&key) {
-                Some(value) => Some(value.clone()),
-                None => None
+    #[cfg(feature="updater")]
+    pub mod working_storage {
+        use super::super::*;
+        use std::collections::HashMap;
+
+        pub struct WorkingTempStorage {
+            ints: HashMap<String, usize>,
+            bools: HashMap<String, bool>,
+            strings: HashMap<String, String>,
+        }
+
+        impl WorkingTempStorage {
+            pub fn new() -> WorkingTempStorage {
+                WorkingTempStorage {
+                    ints: HashMap::new(),
+                    bools: HashMap::new(),
+                    strings: HashMap::new(),
+                }
             }
         }
 
-        fn get_bool(&self, key: String) -> Option<bool> {
-            match self.bools.get(&key) {
-                Some(value) => Some(value.clone()),
-                None => None
+        impl Storage for WorkingTempStorage {
+            fn get_int(&self, key: String) -> Option<usize> {
+                match self.ints.get(&key) {
+                    Some(value) => Some(value.clone()),
+                    None => None
+                }
             }
-        }
 
-        fn get_string(&self, key: String) -> Option<String> {
-            match self.strings.get(&key) {
-                Some(value) => Some(value.clone()),
-                None => None
+            fn get_bool(&self, key: String) -> Option<bool> {
+                match self.bools.get(&key) {
+                    Some(value) => Some(value.clone()),
+                    None => None
+                }
             }
-        }
 
-        fn set_int(&mut self, key: String, value: usize) {
-            self.ints.insert(key, value);
-        }
+            fn get_string(&self, key: String) -> Option<String> {
+                match self.strings.get(&key) {
+                    Some(value) => Some(value.clone()),
+                    None => None
+                }
+            }
 
-        fn set_bool(&mut self, key: String, value: bool) {
-            self.bools.insert(key, value);
-        }
+            fn set_int(&mut self, key: String, value: usize) {
+                self.ints.insert(key, value);
+            }
 
-        fn set_string(&mut self, key: String, value: String) {
-            self.strings.insert(key, value);
+            fn set_bool(&mut self, key: String, value: bool) {
+                self.bools.insert(key, value);
+            }
+
+            fn set_string(&mut self, key: String, value: String) {
+                self.strings.insert(key, value);
+            }
         }
     }
 }

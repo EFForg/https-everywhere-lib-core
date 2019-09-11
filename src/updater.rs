@@ -1,4 +1,7 @@
-use crate::{rulesets::ENABLE_MIXED_RULESETS, rulesets::RULE_ACTIVE_STATES, RuleSets, Storage, UpdateChannel, UpdateChannels};
+mod update_channels;
+pub use update_channels::{UpdateChannel, UpdateChannels};
+
+use crate::{rulesets::ENABLE_MIXED_RULESETS, rulesets::RULE_ACTIVE_STATES, storage::ThreadSafeStorage, rulesets::ThreadSafeRuleSets};
 use flate2::read::GzDecoder;
 use http_req::request;
 use openssl::hash::MessageDigest;
@@ -10,12 +13,9 @@ use std::cmp;
 use std::error::Error;
 use std::fmt;
 use std::io::Read;
-use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 type Timestamp = usize;
-type ThreadSafeRuleSets = Arc<Mutex<RuleSets>>;
-type ThreadSafeStorage = Arc<Mutex<dyn Storage + Sync + Send>>;
 
 #[derive(Debug, Clone)]
 struct UpdaterError {
@@ -310,8 +310,10 @@ impl<'a> Updater<'a> {
 mod tests {
     use super::*;
     use std::{fs, thread};
+    use std::sync::{Arc, Mutex};
+    use crate::RuleSets;
     use crate::rulesets::tests as rulesets_tests;
-    use crate::storage::tests::{TestStorage, WorkingTempStorage};
+    use crate::storage::tests::{mock_storage::TestStorage, working_storage::WorkingTempStorage};
 
     #[test]
     fn updates_correctly() {

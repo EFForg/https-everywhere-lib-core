@@ -1,12 +1,9 @@
 use url::Url;
 use std::error::Error;
 use regex::Regex;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
-use crate::{RuleSet, RuleSets, Storage};
-
-type ThreadSafeRuleSets = Arc<Mutex<RuleSets>>;
-type ThreadSafeStorage = Arc<Mutex<dyn Storage + Sync + Send>>;
+use crate::{storage::ThreadSafeStorage, rulesets::{ThreadSafeRuleSets, RuleSet}};
 
 /// A RewriteAction is used to indicate an action to take, returned by the rewrite_url method on
 /// the Rewriter struct
@@ -156,7 +153,9 @@ impl Rewriter {
 mod tests {
     use super::*;
     use std::{panic, thread};
-    use crate::storage::tests::{TestStorage, HttpNowhereOnStorage};
+    use std::sync::Arc;
+    use crate::RuleSets;
+    use crate::storage::tests::mock_storage::{TestStorage, HttpNowhereOnStorage};
     use crate::rulesets::tests as rulesets_tests;
 
     #[test]
