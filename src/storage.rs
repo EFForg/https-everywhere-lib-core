@@ -19,7 +19,7 @@ pub type ThreadSafeStorage = Arc<Mutex<dyn Storage + Sync + Send>>;
 #[cfg(test)]
 pub mod tests {
 
-    #[cfg(feature="add_rulesets")]
+    #[cfg(all(feature="add_rulesets",any(feature="updater",feature="rewriter")))]
     pub mod mock_storage {
         use super::super::*;
         use multi_default_trait_impl::{default_trait_impl, trait_impl};
@@ -54,7 +54,7 @@ pub mod tests {
         }
     }
 
-    #[cfg(feature="updater")]
+    #[cfg(any(feature="updater",feature="settings"))]
     pub mod working_storage {
         use super::super::*;
         use std::collections::HashMap;

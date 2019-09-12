@@ -1,6 +1,11 @@
 pub mod rulesets;
 pub use rulesets::RuleSets;
 
+#[cfg(feature="settings")]
+pub mod settings;
+#[cfg(feature="settings")]
+pub use settings::Settings;
+
 #[cfg(feature="updater")]
 pub mod updater;
 #[cfg(feature="updater")]
@@ -11,9 +16,9 @@ pub mod rewriter;
 #[cfg(feature="rewriter")]
 pub use rewriter::Rewriter;
 
-#[cfg(any(feature="updater",feature="rewriter"))]
+#[cfg(any(feature="settings",feature="updater",feature="rewriter"))]
 mod storage;
-#[cfg(any(feature="rewriter",feature="updater"))]
+#[cfg(any(feature="settings",feature="rewriter",feature="updater"))]
 pub use storage::Storage;
 
 #[cfg(any(feature="rewriter",feature="updater"))]
