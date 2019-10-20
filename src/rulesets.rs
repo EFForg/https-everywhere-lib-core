@@ -451,6 +451,8 @@ pub mod tests {
         let mut rs = RuleSets::new();
         add_mock_rulesets(&mut rs);
 
+        assert_eq!(rs.potentially_applicable(&String::from("foo.1fichier.com")).len(), 1);
+        assert_eq!(rs.potentially_applicable(&String::from("bar.foo.1fichier.com")).len(), 1);
         assert_eq!(rs.potentially_applicable(&String::from("foo.storage.googleapis.com")).len(), 1);
         assert_eq!(rs.potentially_applicable(&String::from("bar.foo.storage.googleapis.com")).len(), 1);
     }
