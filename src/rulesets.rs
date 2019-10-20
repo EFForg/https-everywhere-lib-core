@@ -385,10 +385,10 @@ impl RuleSets {
 
         // now eat away from the left, with *, so that for x.y.z.google.com we
         // check *.y.z.google.com, *.z.google.com and *.google.com
-        for index in 0..(segmented.len() - 1) {
+        for index in 0..(segmented.len() - 2) {
             let mut segmented_tmp = segmented.clone();
             segmented_tmp[index] = "*";
-            let tmp_host = segmented_tmp.join(".");
+            let tmp_host = &segmented_tmp[index,segmented.len()].join(".");
             self.try_add(&mut results, &tmp_host);
         }
 
