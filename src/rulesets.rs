@@ -388,7 +388,7 @@ impl RuleSets {
         for index in 0..(segmented.len() - 2) {
             let mut segmented_tmp = segmented.clone();
             segmented_tmp[index] = "*";
-            let tmp_host = &segmented_tmp[index,segmented.len()].join(".");
+            let tmp_host = &segmented_tmp[index..segmented.len()].join(".");
             self.try_add(&mut results, &tmp_host);
         }
 
