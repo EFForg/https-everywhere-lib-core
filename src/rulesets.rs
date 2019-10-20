@@ -388,7 +388,7 @@ impl RuleSets {
         for index in 0..(segmented.len() - 1) {
             let mut segmented_tmp = segmented.clone();
             segmented_tmp[index] = "*";
-            let tmp_host = segmented_tmp.join(".");
+            let tmp_host = &segmented_tmp[index..segmented.len()].join(".");
             self.try_add(&mut results, &tmp_host);
         }
 
@@ -451,7 +451,10 @@ pub mod tests {
         let mut rs = RuleSets::new();
         add_mock_rulesets(&mut rs);
 
+        assert_eq!(rs.potentially_applicable(&String::from("foo.1fichier.com")).len(), 1);
+        assert_eq!(rs.potentially_applicable(&String::from("bar.foo.1fichier.com")).len(), 1);
         assert_eq!(rs.potentially_applicable(&String::from("foo.storage.googleapis.com")).len(), 1);
+        assert_eq!(rs.potentially_applicable(&String::from("bar.foo.storage.googleapis.com")).len(), 1);
     }
 
     #[test]
