@@ -146,7 +146,7 @@ impl RuleSet {
     }
 
     #[cfg(feature="add_rulesets")]
-    pub(crate) fn add_rules(&mut self, rules: &Vec<Value>) {
+    pub(crate) fn add_rules(&mut self, rules: &[Value]) {
         for rule in rules {
             if let Value::Object(rule) = rule {
                 let from = match rule.get(JSON_STRINGS.from) {
@@ -163,7 +163,7 @@ impl RuleSet {
     }
 
     #[cfg(feature="add_rulesets")]
-    pub(crate) fn add_exclusions(&mut self, exclusions: &Vec<Value>) {
+    pub(crate) fn add_exclusions(&mut self, exclusions: &[Value]) {
         let mut exclusions_vec = vec![];
         for exclusion in exclusions {
             if let Value::String(exclusion) = exclusion {
@@ -175,7 +175,7 @@ impl RuleSet {
     }
 
     #[cfg(feature="add_rulesets")]
-    pub(crate) fn add_cookierules(&mut self, cookierules: &Vec<Value>) {
+    pub(crate) fn add_cookierules(&mut self, cookierules: &[Value]) {
         let mut cookierules_vec = vec![];
 
         for cookierule in cookierules {
@@ -262,7 +262,7 @@ impl RuleSets {
     /// * `scope` - An optional string which indicates the scope of the current batch of rulesets
     /// being added (see the [ruleset update channels](https://github.com/EFForg/https-everywhere/blob/master/docs/en_US/ruleset-update-channels.md) documentation)
     #[cfg(feature="add_rulesets")]
-    pub fn add_all_from_json_string(&mut self, json_string: &String, enable_mixed_rulesets: &bool, ruleset_active_states: &HashMap<String, bool>, scope: &Option<String>) {
+    pub fn add_all_from_json_string(&mut self, json_string: &str, enable_mixed_rulesets: &bool, ruleset_active_states: &HashMap<String, bool>, scope: &Option<String>) {
         let rulesets: Value = serde_json::from_str(&json_string).expect(ERROR_SERDE_PARSE);
         self.add_all_from_serde_value(rulesets, enable_mixed_rulesets, ruleset_active_states, scope);
     }
@@ -362,7 +362,7 @@ impl RuleSets {
     ///
     /// * `host` - A string which indicates the host to search for potentially applicable rulesets
     #[cfg(feature="potentially_applicable")]
-    pub fn potentially_applicable(&self, host: &String) -> Vec<Arc<RuleSet>> {
+    pub fn potentially_applicable(&self, host: &str) -> Vec<Arc<RuleSet>> {
         let mut results = vec![];
 
         self.try_add(&mut results, host);
@@ -398,7 +398,7 @@ impl RuleSets {
     }
 
     #[cfg(feature="potentially_applicable")]
-    fn try_add(&self, results: &mut Vec<Arc<RuleSet>>, host: &String) {
+    fn try_add(&self, results: &mut Vec<Arc<RuleSet>>, host: &str) {
         if self.0.contains_key(host) {
             if let Some(rulesets) = self.0.get(host) {
                 for ruleset in rulesets {
@@ -444,7 +444,7 @@ pub mod tests {
         let mut rs = RuleSets::new();
         add_mock_rulesets(&mut rs);
 
-        assert_eq!(rs.potentially_applicable(&String::from("1fichier.com")).len(), 1);
+        assert_eq!(rs.potentially_applicable("1fichier.com").len(), 1);
     }
 
     #[test]
@@ -453,10 +453,10 @@ pub mod tests {
         let mut rs = RuleSets::new();
         add_mock_rulesets(&mut rs);
 
-        assert_eq!(rs.potentially_applicable(&String::from("foo.1fichier.com")).len(), 1);
-        assert_eq!(rs.potentially_applicable(&String::from("bar.foo.1fichier.com")).len(), 1);
-        assert_eq!(rs.potentially_applicable(&String::from("foo.storage.googleapis.com")).len(), 1);
-        assert_eq!(rs.potentially_applicable(&String::from("bar.foo.storage.googleapis.com")).len(), 1);
+        assert_eq!(rs.potentially_applicable("foo.1fichier.com").len(), 1);
+        assert_eq!(rs.potentially_applicable("bar.foo.1fichier.com").len(), 1);
+        assert_eq!(rs.potentially_applicable("foo.storage.googleapis.com").len(), 1);
+        assert_eq!(rs.potentially_applicable("bar.foo.storage.googleapis.com").len(), 1);
     }
 
     #[test]
@@ -465,7 +465,7 @@ pub mod tests {
         let mut rs = RuleSets::new();
         add_mock_rulesets(&mut rs);
 
-        assert_eq!(rs.potentially_applicable(&String::from("nonmatch.example.com")).len(), 0);
+        assert_eq!(rs.potentially_applicable("nonmatch.example.com").len(), 0);
     }
 
     #[test]

@@ -31,7 +31,7 @@ pub struct UpdateChannel {
     pub replaces_default_rulesets: bool,
 }
 
-impl From<&String> for UpdateChannel {
+impl From<&str> for UpdateChannel {
     /// Returns an update channel given a JSON string
     ///
     /// # Arguments
@@ -43,7 +43,7 @@ impl From<&String> for UpdateChannel {
     ///
     /// Panics if a name, update path prefix, or pem is not specified, if the pem file does not
     /// parse correctly into an RSA key, or it is not an object
-    fn from(json_string: &String) -> UpdateChannel {
+    fn from(json_string: &str) -> UpdateChannel {
         let update_channel: Value = serde_json::from_str(&json_string).expect(ERROR_SERDE_PARSE);
         UpdateChannel::from(&update_channel)
     }
@@ -52,7 +52,7 @@ impl From<&String> for UpdateChannel {
 impl From<&Value> for UpdateChannel {
     /// Returns an update channel given a serde_json::Value
     ///
-    /// See the implementation of `From<&String>` for more detail
+    /// See the implementation of `From<&str>` for more detail
     fn from(json_value: &Value) -> UpdateChannel {
         if let Value::Object(update_channel) = json_value {
             let name = match update_channel.get(JSON_STRINGS.name) {
@@ -113,13 +113,13 @@ impl UpdateChannels {
 
 /// Returns update channels given a JSON string
 ///
-/// See the implementation of `From<&String> for UpdateChannel` for more detail
+/// See the implementation of `From<&str> for UpdateChannel` for more detail
 ///
 /// # Panics
 ///
 /// Panics if the update channels JSON is not an array
-impl From<&String> for UpdateChannels {
-    fn from(json_string: &String) -> UpdateChannels {
+impl From<&str> for UpdateChannels {
+    fn from(json_string: &str) -> UpdateChannels {
         if let Value::Array(update_channels) = serde_json::from_str(&json_string).expect(ERROR_SERDE_PARSE) {
             UpdateChannels(update_channels.into_iter().map(|uc| {
                 UpdateChannel::from(&uc)
@@ -140,7 +140,7 @@ mod tests {
     }
 
     fn create_mock_update_channels() -> UpdateChannels {
-        UpdateChannels::from(&mock_update_channels_json())
+        UpdateChannels::from(&mock_update_channels_json()[..])
     }
 
     #[test]

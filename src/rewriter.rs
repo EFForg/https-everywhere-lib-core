@@ -48,7 +48,7 @@ impl Rewriter {
     /// # Arguments
     ///
     /// * `url` - A URL to determine the action for
-    pub fn rewrite_url(&self, url: &String) -> Result<RewriteAction, Box<dyn Error>> {
+    pub fn rewrite_url(&self, url: &str) -> Result<RewriteAction, Box<dyn Error>> {
         if let Some(false) = self.storage.lock().unwrap().get_bool(String::from("global_enabled")){
             return Ok(RewriteAction::NoOp);
         }
@@ -67,10 +67,10 @@ impl Rewriter {
                 if url.scheme() == "http" || url.scheme() == "ftp" {
                     let num_localhost = Regex::new(r"^127(\.[0-9]{1,3}){3}$").unwrap();
                     if !hostname.ends_with(".onion") &&
-                        hostname != "localhost".to_string() &&
+                        hostname != "localhost" &&
                         !num_localhost.is_match(&hostname) &&
-                        hostname != "0.0.0.0".to_string() &&
-                        hostname != "[::1]".to_string() {
+                        hostname != "0.0.0.0" &&
+                        hostname != "[::1]" {
                         should_cancel = true;
                     }
                 }
@@ -158,7 +158,7 @@ impl Rewriter {
     ///
     /// * `domain` - The domain for this cookie
     /// * `name` - The name of the cookie
-    pub fn should_secure_cookie(&mut self, domain: &String, name: &String) -> bool {
+    pub fn should_secure_cookie(&mut self, domain: &str, name: &str) -> bool {
         let domain = String::from(domain.trim_start_matches('.'));
 
         // We need a cookie pass two tests before patching it
@@ -202,7 +202,7 @@ impl Rewriter {
     }
 
     /// Return whether it is safe to secure the cookie
-    fn safe_to_secure_cookie(&mut self, domain: String, potentially_applicable: &Vec<Arc<RuleSet>>) -> bool {
+    fn safe_to_secure_cookie(&mut self, domain: String, potentially_applicable: &[Arc<RuleSet>]) -> bool {
         // Make up a random URL on the domain, and see if we would HTTPSify that.
         let test_url = String::from("http://") + &domain + "/is_it_safe/to_secure_this_cookie";
 
@@ -238,11 +238,11 @@ mod tests {
         let rw = Rewriter::new(rs, s);
 
         assert_eq!(
-            rw.rewrite_url(&String::from("http://freerangekitten.com/")).unwrap(),
+            rw.rewrite_url("http://freerangekitten.com/").unwrap(),
             RewriteAction::RewriteUrl(String::from("https://freerangekitten.com/")));
 
         assert_eq!(
-            rw.rewrite_url(&String::from("http://fake-example.com/")).unwrap(),
+            rw.rewrite_url("http://fake-example.com/").unwrap(),
             RewriteAction::NoOp);
     }
 
@@ -258,25 +258,25 @@ mod tests {
         assert_eq!(rw.get_rewrite_count(), 0);
 
         assert_eq!(
-            rw.rewrite_url(&String::from("http://freerangekitten.com/")).unwrap(),
+            rw.rewrite_url("http://freerangekitten.com/").unwrap(),
             RewriteAction::RewriteUrl(String::from("https://freerangekitten.com/")));
 
         assert_eq!(rw.get_rewrite_count(), 1);
 
         assert_eq!(
-            rw.rewrite_url(&String::from("http://fake-example.com/")).unwrap(),
+            rw.rewrite_url("http://fake-example.com/").unwrap(),
             RewriteAction::CancelRequest);
 
         assert_eq!(rw.get_rewrite_count(), 1);
 
         assert_eq!(
-            rw.rewrite_url(&String::from("http://fake-example.onion/")).unwrap(),
+            rw.rewrite_url("http://fake-example.onion/").unwrap(),
             RewriteAction::NoOp);
 
         assert_eq!(rw.get_rewrite_count(), 1);
 
         assert_eq!(
-            rw.rewrite_url(&String::from("http://fake-example.onion..../")).unwrap(),
+            rw.rewrite_url("http://fake-example.onion..../").unwrap(),
             RewriteAction::NoOp);
     }
 
@@ -290,11 +290,11 @@ mod tests {
         let rw = Rewriter::new(rs, s);
 
         assert_eq!(
-            rw.rewrite_url(&String::from("http://chart.googleapis.com/")).unwrap(),
+            rw.rewrite_url("http://chart.googleapis.com/").unwrap(),
             RewriteAction::NoOp);
 
         assert_eq!(
-            rw.rewrite_url(&String::from("http://chart.googleapis.com/123")).unwrap(),
+            rw.rewrite_url("http://chart.googleapis.com/123").unwrap(),
             RewriteAction::RewriteUrl(String::from("https://chart.googleapis.com/123")));
     }
 
@@ -308,7 +308,7 @@ mod tests {
         let rw = Rewriter::new(rs, s);
 
         assert_eq!(
-            rw.rewrite_url(&String::from("http://eff:techprojects@chart.googleapis.com/123")).unwrap(),
+            rw.rewrite_url("http://eff:techprojects@chart.googleapis.com/123").unwrap(),
             RewriteAction::RewriteUrl(String::from("https://eff:techprojects@chart.googleapis.com/123")));
     }
 
@@ -321,7 +321,7 @@ mod tests {
         let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
         let mut rw = Rewriter::new(rs, s);
 
-        assert_eq!(rw.should_secure_cookie(&String::from("maps.gstatic.com"), &String::from("some_google_cookie")), true);
+        assert_eq!(rw.should_secure_cookie("maps.gstatic.com", "some_google_cookie"), true);
     }
 
     #[test]
@@ -333,7 +333,7 @@ mod tests {
         let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
         let mut rw = Rewriter::new(rs, s);
 
-        assert_eq!(rw.should_secure_cookie(&String::from("example.com"), &String::from("some_example_cookie")), false);
+        assert_eq!(rw.should_secure_cookie("example.com", "some_example_cookie"), false);
     }
 
     #[test]
