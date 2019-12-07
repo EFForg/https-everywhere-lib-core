@@ -1,7 +1,9 @@
-use url::Url;
-use std::error::Error;
+use lru::LruCache;
 use regex::Regex;
+use std::error::Error;
+use std::sync::Arc;
 use std::sync::Mutex;
+use url::Url;
 
 use crate::{storage::ThreadSafeStorage, rulesets::{ThreadSafeRuleSets, RuleSet}};
 
@@ -21,6 +23,7 @@ pub struct Rewriter {
     rulesets: ThreadSafeRuleSets,
     storage: ThreadSafeStorage,
     rewrite_count: Mutex<usize>,
+    cookie_host_safety_cache: LruCache<String, bool>,
 }
 
 impl Rewriter {
@@ -35,6 +38,7 @@ impl Rewriter {
             rulesets,
             storage,
             rewrite_count: Mutex::new(0),
+            cookie_host_safety_cache: LruCache::new(250), // 250 is somewhat arbitrary
         }
     }
 
@@ -147,6 +151,72 @@ impl Rewriter {
     pub fn get_rewrite_count(&self) -> usize {
         *self.rewrite_count.lock().unwrap()
     }
+
+    /// Return whether a cookie should be secured based on our cookierule criteria.
+    ///
+    /// # Arguments
+    ///
+    /// * `domain` - The domain for this cookie
+    /// * `name` - The name of the cookie
+    pub fn should_secure_cookie(&mut self, domain: &String, name: &String) -> bool {
+        let domain = String::from(domain.trim_start_matches('.'));
+
+        // We need a cookie pass two tests before patching it
+        //   (1) it is safe to secure the cookie, as per safe_to_secure_cookie()
+        //   (2) it matches the CookieRule
+        //
+        // We keep a cache of the results for (1). If we have a cached result which
+        //   (a) is false, we should not secure the cookie and return false immediately
+        //   (b) is true, we need to perform test (2)
+        //
+        // If we have no cached result,
+        //   (c) We need to perform (1) and (2) in place
+
+        let safe = match self.cookie_host_safety_cache.get(&domain) {
+            Some(safe) => {
+                debug!("Cookie host safety cache hit for {:?}", domain);
+                if !safe {
+                    return false;
+                }
+                true
+            },
+            None => {
+                debug!("Cookie host safety cache miss for {:?}", domain);
+                false
+            },
+        };
+
+        let potentially_applicable = self.rulesets.lock().unwrap().potentially_applicable(&domain);
+        for ruleset in &potentially_applicable {
+            if !ruleset.cookierules.is_none() && ruleset.active {
+                for cookierule in ruleset.cookierules.as_ref().unwrap() {
+                    let cookierule_host = Regex::new(&cookierule.host_regex).unwrap();
+                    let cookierule_name = Regex::new(&cookierule.name_regex).unwrap();
+                    if cookierule_host.is_match(&domain) && cookierule_name.is_match(name) {
+                        return safe || self.safe_to_secure_cookie(domain, &potentially_applicable);
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Return whether it is safe to secure the cookie
+    fn safe_to_secure_cookie(&mut self, domain: String, potentially_applicable: &Vec<Arc<RuleSet>>) -> bool {
+        // Make up a random URL on the domain, and see if we would HTTPSify that.
+        let test_url = String::from("http://") + &domain + "/is_it_safe/to_secure_this_cookie";
+
+        for ruleset in potentially_applicable {
+            if ruleset.active && !ruleset.apply(&test_url).is_none() {
+                info!("Cookie domain could be secured: {:?}", domain);
+                self.cookie_host_safety_cache.put(domain, true);
+                return true;
+            }
+        }
+        info!("Cookie domain could not be secured: {:?}", domain);
+        self.cookie_host_safety_cache.put(domain, false);
+        false
+    }
 }
 
 #[cfg(all(test,feature="add_rulesets"))]
@@ -240,6 +310,30 @@ mod tests {
         assert_eq!(
             rw.rewrite_url(&String::from("http://eff:techprojects@chart.googleapis.com/123")).unwrap(),
             RewriteAction::RewriteUrl(String::from("https://eff:techprojects@chart.googleapis.com/123")));
+    }
+
+    #[test]
+    fn secures_cookies() {
+        let mut rs = RuleSets::new();
+        rulesets_tests::add_mock_rulesets(&mut rs);
+        let rs = Arc::new(Mutex::new(rs));
+
+        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
+        let mut rw = Rewriter::new(rs, s);
+
+        assert_eq!(rw.should_secure_cookie(&String::from("maps.gstatic.com"), &String::from("some_google_cookie")), true);
+    }
+
+    #[test]
+    fn does_not_secure_unspecified_cookies() {
+        let mut rs = RuleSets::new();
+        rulesets_tests::add_mock_rulesets(&mut rs);
+        let rs = Arc::new(Mutex::new(rs));
+
+        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
+        let mut rw = Rewriter::new(rs, s);
+
+        assert_eq!(rw.should_secure_cookie(&String::from("example.com"), &String::from("some_example_cookie")), false);
     }
 
     #[test]
