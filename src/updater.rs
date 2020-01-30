@@ -138,7 +138,7 @@ impl<'a> Updater<'a> {
 
 
         let mut rulesets_writer = Vec::new();
-        let rulesets_res = request::get(update_channel.update_path_prefix.clone() + "/default.rulesets." + &rulesets_timestamp.to_string() + ".gz", &mut rulesets_writer)?;
+        let rulesets_res = request::get(update_channel.update_path_prefix.clone() + "/default.rulesets.json" + &rulesets_timestamp.to_string() + ".gz", &mut rulesets_writer)?;
 
         if !rulesets_res.status_code().is_success() {
             return Err(Box::new(UpdaterError::new(format!("{}: A non-2XX response was returned from the ruleset URL", &update_channel.name))));
