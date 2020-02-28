@@ -84,6 +84,22 @@ impl Rule {
         }
     }
 
+    /// Returns a string of the from regex, regardless of the enum variant
+    pub fn from_regex(&self) -> String {
+        match self {
+            Rule::Trivial => String::from("^http:"),
+            Rule::NonTrivial(from_regex, _) => from_regex.clone()
+        }
+    }
+
+    /// Returns a string of the from regex, regardless of the enum variant
+    pub fn to(&self) -> String {
+        match self {
+            Rule::Trivial => String::from("https:"),
+            Rule::NonTrivial(_, to) => to.clone()
+        }
+    }
+
 }
 
 
@@ -356,6 +372,26 @@ impl RuleSets {
         }
     }
 
+    /// Return a vector of rulesets which are active and have no exclusions, for all hosts that
+    /// are in a single ruleset, and end in the given ending
+    ///
+    /// # Arguments
+    ///
+    /// * `ending` - A string which indicates the target ending to search for
+    #[cfg(feature="get_simple_rules_ending_with")]
+    pub fn get_simple_rules_ending_with(&self, ending: &str) -> BTreeMap<String, Arc<RuleSet>> {
+        let mut results = BTreeMap::new();
+        for (host, ruleset) in &self.0 {
+            if host.ends_with(ending) &&
+               ruleset.len() == 1 &&
+               ruleset[0].active == true &&
+               ruleset[0].exclusions.is_none() {
+                results.insert(host.clone(), Arc::clone(&ruleset[0]));
+            }
+        }
+        results
+    }
+
     /// Return a vector of rulesets that apply to the given host
     ///
     /// # Arguments
@@ -436,6 +472,16 @@ pub mod tests {
 
         let rulesets_representation = fs::read_to_string("tests/rulesets_representation.txt").unwrap();
         assert_eq!(format!("{:?}", rs), rulesets_representation);
+    }
+
+    #[test]
+    #[cfg(feature="get_simple_rules_ending_with")]
+    fn get_simple_rules_ending_with() {
+        let mut rs = RuleSets::new();
+        add_mock_rulesets(&mut rs);
+
+        assert_eq!(rs.get_simple_rules_ending_with(".com").len(), 2);
+        assert_eq!(rs.get_simple_rules_ending_with(".org").len(), 0);
     }
 
     #[test]
