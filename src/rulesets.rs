@@ -5,9 +5,12 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 #[cfg(feature="add_rulesets")]
 use crate::strings::ERROR_SERDE_PARSE;
+#[cfg(feature="get_simple_rules_ending_with")]
+use crate::RegEx;
 #[cfg(feature="add_rulesets")]
 use std::collections::HashMap;
 #[cfg(feature="rewriter")]
+#[cfg(any(all(test,feature="get_simple_rules_ending_with"),feature="rewriter"))]
 use regex::Regex;
 
 #[cfg(any(feature="rewriter",feature="updater"))]
@@ -379,14 +382,19 @@ impl RuleSets {
     ///
     /// * `ending` - A string which indicates the target ending to search for
     #[cfg(feature="get_simple_rules_ending_with")]
-    pub fn get_simple_rules_ending_with(&self, ending: &str) -> BTreeMap<String, Arc<RuleSet>> {
-        let mut results = BTreeMap::new();
+    pub fn get_simple_rules_ending_with<T: RegEx>(&self, ending: &str) -> Vec<(&String, Arc<RuleSet>, &Rule)> {
+        let mut results = vec![];
         for (host, ruleset) in &self.0 {
             if host.ends_with(ending) &&
                ruleset.len() == 1 &&
                ruleset[0].active == true &&
                ruleset[0].exclusions.is_none() {
-                results.insert(host.clone(), Arc::clone(&ruleset[0]));
+                for rule in &ruleset[0].rules {
+                    let from_re = T::new(&rule.from_regex());
+                    if from_re.is_match(&format!("http://{}/", host)) {
+                        results.push((host, Arc::clone(&ruleset[0]), rule));
+                    }
+                }
             }
         }
         results
@@ -480,8 +488,8 @@ pub mod tests {
         let mut rs = RuleSets::new();
         add_mock_rulesets(&mut rs);
 
-        assert_eq!(rs.get_simple_rules_ending_with(".com").len(), 2);
-        assert_eq!(rs.get_simple_rules_ending_with(".org").len(), 0);
+        assert_eq!(rs.get_simple_rules_ending_with::<Regex>(".com").len(), 2);
+        assert_eq!(rs.get_simple_rules_ending_with::<Regex>(".org").len(), 0);
     }
 
     #[test]

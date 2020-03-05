@@ -16,6 +16,11 @@ pub mod rewriter;
 #[cfg(feature="rewriter")]
 pub use rewriter::Rewriter;
 
+#[cfg(feature="get_simple_rules_ending_with")]
+pub mod regex;
+#[cfg(feature="get_simple_rules_ending_with")]
+pub use crate::regex::RegEx;
+
 #[cfg(any(feature="settings",feature="updater",feature="rewriter"))]
 mod storage;
 #[cfg(any(feature="settings",feature="rewriter",feature="updater"))]
