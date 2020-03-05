@@ -46,6 +46,7 @@ features = [
     "add_rulesets",
     "potentially_applicable",
     "settings",
+    "get_simple_rules_ending_with",
 ]
 
 check("stable", features)

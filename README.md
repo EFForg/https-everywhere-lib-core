@@ -14,15 +14,22 @@ Description of features follows.
 
 Expose the high-level API for adding rulesets to a `RuleSets` instance via `RuleSets::add_all_from_json_string`.
 
+### `get_simple_rules_ending_with`
+
+Expose the high-level API for looking up simple rules on a `RuleSets` instance ending in a string via `RuleSets::get_simple_rules_ending_with`.
+
 ### `potentially_applicable`
 
 Expose the high-level API for looking up potentially applicable rulesets on a `RuleSets` instance via `RuleSets::potentially_applicable`.
 
 ### `rewriter`
 
-Expose the high-level API for rewriting URLs
+Expose the high-level API for rewriting URLs.
+
+### `settings`
+
+Expose the high-level API for retrieving and storing global settings.
 
 ### `updater`
 
 Expose the high-level API for updating the rulesets dynamically via update channels.
-

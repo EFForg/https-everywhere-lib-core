@@ -9,8 +9,7 @@ use crate::strings::ERROR_SERDE_PARSE;
 use crate::RegEx;
 #[cfg(feature="add_rulesets")]
 use std::collections::HashMap;
-#[cfg(feature="rewriter")]
-#[cfg(any(all(test,feature="get_simple_rules_ending_with"),feature="rewriter"))]
+#[cfg(any(all(test,feature="get_simple_rules_ending_with",feature="add_rulesets"),feature="rewriter"))]
 use regex::Regex;
 
 #[cfg(any(feature="rewriter",feature="updater"))]
@@ -375,8 +374,9 @@ impl RuleSets {
         }
     }
 
-    /// Return a vector of rulesets which are active and have no exclusions, for all hosts that
-    /// are in a single ruleset, and end in the given ending
+    /// Return a vector of `(host, ruleset, rule)`s which are active and have no exclusions, for
+    /// all hosts that are in a single ruleset, end in the given ending, and match the rule `from`
+    /// regex.  Provide the regex engine that implements the trait `RegEx` as a generic.
     ///
     /// # Arguments
     ///
