@@ -1,8 +1,8 @@
 use lru::LruCache;
 use regex::Regex;
 use std::error::Error;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+
 use url::Url;
 
 use crate::{storage::ThreadSafeStorage, rulesets::{ThreadSafeRuleSets, RuleSet}};
@@ -22,7 +22,7 @@ pub enum RewriteAction {
 pub struct Rewriter {
     rulesets: ThreadSafeRuleSets,
     storage: ThreadSafeStorage,
-    rewrite_count: Mutex<usize>,
+    rewrite_count: AtomicUsize,
     cookie_host_safety_cache: LruCache<String, bool>,
 }
 
@@ -37,7 +37,7 @@ impl Rewriter {
         Rewriter {
             rulesets,
             storage,
-            rewrite_count: Mutex::new(0),
+            rewrite_count: AtomicUsize::new(0),
             cookie_host_safety_cache: LruCache::new(250), // 250 is somewhat arbitrary
         }
     }
@@ -56,7 +56,7 @@ impl Rewriter {
         let mut url = Url::parse(url)?;
         if let Some(hostname) = url.host_str() {
             let mut hostname = hostname.trim_end_matches('.');
-            if hostname.len() == 0 {
+            if hostname.is_empty() {
                 hostname = ".";
             }
             let hostname = hostname.to_string();
@@ -120,10 +120,8 @@ impl Rewriter {
             }
 
             if let Some(true) = http_nowhere_on {
-                if should_cancel {
-                    if new_url.is_none() {
-                        return Ok(RewriteAction::CancelRequest);
-                    }
+                if should_cancel && new_url.is_none() {
+                    return Ok(RewriteAction::CancelRequest);
                 }
 
                 // Cancel if we're about to redirect to HTTP or FTP in EASE mode
@@ -137,7 +135,7 @@ impl Rewriter {
 
             if let Some(url) = new_url {
                 info!("rewrite_url returning redirect url: {}", url.as_str());
-                *self.rewrite_count.lock().unwrap() += 1;
+                self.rewrite_count.fetch_add(1, Ordering::Relaxed);
                 Ok(RewriteAction::RewriteUrl(url.as_str().to_string()))
             } else {
                 Ok(RewriteAction::NoOp)
@@ -149,7 +147,7 @@ impl Rewriter {
 
     /// Get the number of times a URL has been rewritten with this rewriter
     pub fn get_rewrite_count(&self) -> usize {
-        *self.rewrite_count.lock().unwrap()
+        self.rewrite_count.load(Ordering::Relaxed)
     }
 
     /// Return whether a cookie should be secured based on our cookierule criteria.
@@ -188,7 +186,7 @@ impl Rewriter {
 
         let potentially_applicable = self.rulesets.lock().unwrap().potentially_applicable(&domain);
         for ruleset in &potentially_applicable {
-            if !ruleset.cookierules.is_none() && ruleset.active {
+            if ruleset.cookierules.is_some() && ruleset.active {
                 for cookierule in ruleset.cookierules.as_ref().unwrap() {
                     let cookierule_host = Regex::new(&cookierule.host_regex).unwrap();
                     let cookierule_name = Regex::new(&cookierule.name_regex).unwrap();
@@ -207,7 +205,7 @@ impl Rewriter {
         let test_url = String::from("http://") + &domain + "/is_it_safe/to_secure_this_cookie";
 
         for ruleset in potentially_applicable {
-            if ruleset.active && !ruleset.apply(&test_url).is_none() {
+            if ruleset.active && ruleset.apply(&test_url).is_some() {
                 info!("Cookie domain could be secured: {:?}", domain);
                 self.cookie_host_safety_cache.put(domain, true);
                 return true;
@@ -223,7 +221,7 @@ impl Rewriter {
 mod tests {
     use super::*;
     use std::{panic, thread};
-    use std::sync::Arc;
+    use std::sync::Mutex;
     use crate::RuleSets;
     use crate::storage::tests::mock_storage::{TestStorage, HttpNowhereOnStorage};
     use crate::rulesets::tests as rulesets_tests;

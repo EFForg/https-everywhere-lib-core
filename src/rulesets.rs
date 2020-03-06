@@ -25,11 +25,6 @@ lazy_static!{
     pub(crate) static ref RULE_ACTIVE_STATES: HashMap<String, bool> = HashMap::new();
 }
 
-#[cfg(feature="rewriter")]
-lazy_static!{
-    pub(crate) static ref TRIVIAL_REGEX: Regex = Regex::new(r"^http:").unwrap();
-}
-
 
 #[cfg(feature="add_rulesets")]
 struct StaticJsonStrings {
@@ -220,7 +215,7 @@ impl RuleSet {
     #[cfg(feature="rewriter")]
     pub(crate) fn apply(&self, url: &str) -> Option<String> {
         // If we're covered by an exclusion, return
-        if !self.exclusions.is_none() {
+        if self.exclusions.is_some() {
             let exclusions_regex = Regex::new(&self.exclusions.clone().unwrap()).unwrap();
             if exclusions_regex.is_match(&url) {
                debug!("Excluded url: {}", url);
@@ -231,7 +226,11 @@ impl RuleSet {
         for rule in self.rules.iter() {
             match rule {
                 Rule::Trivial => {
-                    return Some(TRIVIAL_REGEX.replace_all(url, "https:").to_string());
+                    let mut url = url.to_string();
+                    if url.starts_with("http:") {
+                        url.replace_range(..5, "https:");
+                    }
+                    return Some(url);
                 }
                 Rule::NonTrivial(from_regex, to) => {
                     let from_regex = Regex::new(from_regex).unwrap();
@@ -249,6 +248,7 @@ impl RuleSet {
 
 /// RuleSets consists of a tuple btreemap of rulesets, keyed by some target FQDN
 #[derive(Debug)]
+#[derive(Default)]
 pub struct RuleSets(pub BTreeMap<String, Vec<Arc<RuleSet>>>);
 
 impl RuleSets {
@@ -280,13 +280,13 @@ impl RuleSets {
     /// * `scope` - An optional string which indicates the scope of the current batch of rulesets
     /// being added (see the [ruleset update channels](https://github.com/EFForg/https-everywhere/blob/master/docs/en_US/ruleset-update-channels.md) documentation)
     #[cfg(feature="add_rulesets")]
-    pub fn add_all_from_json_string(&mut self, json_string: &str, enable_mixed_rulesets: &bool, ruleset_active_states: &HashMap<String, bool>, scope: &Option<String>) {
+    pub fn add_all_from_json_string(&mut self, json_string: &str, enable_mixed_rulesets: bool, ruleset_active_states: &HashMap<String, bool>, scope: &Option<String>) {
         let rulesets: Value = serde_json::from_str(&json_string).expect(ERROR_SERDE_PARSE);
         self.add_all_from_serde_value(rulesets, enable_mixed_rulesets, ruleset_active_states, scope);
     }
 
     #[cfg(feature="add_rulesets")]
-    pub fn add_all_from_serde_value(&mut self, rulesets: Value, enable_mixed_rulesets: &bool, ruleset_active_states: &HashMap<String, bool>, scope: &Option<String>) {
+    pub fn add_all_from_serde_value(&mut self, rulesets: Value, enable_mixed_rulesets: bool, ruleset_active_states: &HashMap<String, bool>, scope: &Option<String>) {
         let scope: Arc<Option<String>> = Arc::new(scope.clone());
 
         let mut add_one_from_json = |ruleset: Value| {
@@ -296,7 +296,7 @@ impl RuleSets {
                 let mut note = String::new();
 
                 if let Some(Value::String(default_off)) = ruleset.get(JSON_STRINGS.default_off) {
-                    if default_off != &JSON_STRINGS.user_rule {
+                    if default_off != JSON_STRINGS.user_rule {
                         default_state = false;
                     }
                     note.push_str(default_off);
@@ -304,7 +304,7 @@ impl RuleSets {
                 }
 
                 if let Some(Value::String(platform)) = ruleset.get(JSON_STRINGS.platform) {
-                    if platform == &JSON_STRINGS.mixed_content {
+                    if platform == JSON_STRINGS.mixed_content {
                         if !enable_mixed_rulesets {
                             default_state = false;
                         }
@@ -387,7 +387,7 @@ impl RuleSets {
         for (host, ruleset) in &self.0 {
             if host.ends_with(ending) &&
                ruleset.len() == 1 &&
-               ruleset[0].active == true &&
+               ruleset[0].active &&
                ruleset[0].exclusions.is_none() {
                 for rule in &ruleset[0].rules {
                     let from_re = T::new(&rule.from_regex());
@@ -412,7 +412,7 @@ impl RuleSets {
         self.try_add(&mut results, host);
 
         // Ensure host is well-formed (RFC 1035)
-        if host.len() <= 0 || host.len() > 255 || host.find("..").is_some() {
+        if host.is_empty() || host.len() > 255 || host.find("..").is_some() {
             return results;
         }
 
@@ -463,7 +463,7 @@ pub mod tests {
     }
 
     pub fn add_mock_rulesets(rs: &mut RuleSets) {
-        rs.add_all_from_json_string(&mock_rulesets_json(), &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
+        rs.add_all_from_json_string(&mock_rulesets_json(), ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
     }
 
     #[test]

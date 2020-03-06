@@ -99,7 +99,7 @@ impl<'a> Updater<'a> {
                 Ok(timestamp) => timestamp,
                 Err(_) => return None
             };
-            
+
             let timestamp: Timestamp = match ts_string.trim().parse() {
                 Ok(num) => num,
                 Err(_) => return None
@@ -276,11 +276,11 @@ impl<'a> Updater<'a> {
         rs.clear();
 
         for rt in rulesets_tuples {
-            rs.add_all_from_serde_value(rt.0, &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &rt.1);
+            rs.add_all_from_serde_value(rt.0, ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &rt.1);
         }
 
-        if !replaces && !self.default_rulesets.is_none() {
-            rs.add_all_from_json_string(&self.default_rulesets.clone().unwrap(), &ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
+        if !replaces && self.default_rulesets.is_some() {
+            rs.add_all_from_json_string(&self.default_rulesets.clone().unwrap(), ENABLE_MIXED_RULESETS, &RULE_ACTIVE_STATES, &None);
         }
     }
 

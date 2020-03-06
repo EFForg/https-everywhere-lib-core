@@ -69,7 +69,7 @@ impl From<&Value> for UpdateChannel {
                 _ => None
             };
             let replaces_default_rulesets = match update_channel.get(JSON_STRINGS.replaces_default_rulesets) {
-                Some(Value::Bool(replaces_default_rulesets)) => replaces_default_rulesets.clone(),
+                Some(Value::Bool(replaces_default_rulesets)) => *replaces_default_rulesets,
                 _ => false
             };
             let key = match update_channel.get(JSON_STRINGS.pem) {
