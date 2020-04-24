@@ -68,6 +68,7 @@ impl Rewriter {
                     let num_localhost = Regex::new(r"^127(\.[0-9]{1,3}){3}$").unwrap();
                     if !hostname.ends_with(".onion") &&
                         hostname != "localhost" &&
+                        !hostname.ends_with(".localhost") &&
                         !num_localhost.is_match(&hostname) &&
                         hostname != "0.0.0.0" &&
                         hostname != "[::1]" {
