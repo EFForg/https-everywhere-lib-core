@@ -9,6 +9,7 @@ use openssl::pkey::PKey;
 use openssl::rsa::Padding;
 use openssl::sign::Verifier;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::cmp;
 use std::error::Error;
 use std::fmt;
@@ -43,15 +44,15 @@ impl Error for UpdaterError {
 }
 
 
-pub struct Updater<'a> {
+pub struct Updater {
     rulesets: ThreadSafeRuleSets,
-    update_channels: &'a UpdateChannels,
+    pub update_channels: UpdateChannels,
     storage: ThreadSafeStorage,
     default_rulesets: Option<String>,
     periodicity: usize,
 }
 
-impl<'a> Updater<'a> {
+impl Updater {
     /// Returns an updater with the rulesets, update channels, storage, and interval to check for
     /// new rulesets
     ///
@@ -63,7 +64,7 @@ impl<'a> Updater<'a> {
     /// * `default_rulesets` - An optional string representing the default rulesets, which may or
     /// may not be replaced by updates
     /// * `periodicity` - The interval to check for new rulesets
-    pub fn new(rulesets: ThreadSafeRuleSets, update_channels: &'a UpdateChannels, storage: ThreadSafeStorage, default_rulesets: Option<String>, periodicity: usize) -> Updater<'a> {
+    pub fn new(rulesets: ThreadSafeRuleSets, update_channels: UpdateChannels, storage: ThreadSafeStorage, default_rulesets: Option<String>, periodicity: usize) -> Updater {
         Updater {
             rulesets,
             update_channels,
@@ -89,8 +90,7 @@ impl<'a> Updater<'a> {
     fn check_for_new_rulesets(&self, uc: &UpdateChannel) -> Option<Timestamp> {
         let mut writer = Vec::new();
 
-        let res = match request::get(uc.update_path_prefix.clone() + "/latest-rulesets-timestamp", &mut writer) {
-            Ok(result) => result,
+        let res = match request::get(uc.update_path_prefix.clone() + "/latest-rulesets-timestamp", &mut writer) { Ok(result) => result,
             Err(_) => return None
         };
 
@@ -117,6 +117,16 @@ impl<'a> Updater<'a> {
         }
     }
 
+    /// Returns a `HashMap` of optional timestamps for all rulesets, keyed by the ruleset name
+    pub fn get_update_channel_timestamps(&self) -> HashMap<String, Option<Timestamp>> {
+        let mut timestamps = HashMap::new();
+
+        for uc in self.update_channels.get_all() {
+            timestamps.insert(String::from(&uc.name), self.storage.lock().unwrap().get_int(format!("rulesets-timestamp: {}", &uc.name)));
+        }
+        timestamps
+    }
+
     /// Given an update channel and timestamp, this returns a result-wrapped tuple, the first value the first value is
     /// a `Vec<u8>` of the signature file, the second is a `Vec<u8>` of the rulesets file.
     ///
@@ -124,7 +134,7 @@ impl<'a> Updater<'a> {
     ///
     /// * `rulesets_timestamp` - The timestamp for the rulesets
     /// * `update_channel` - The update channel to download rulesets for
-    fn get_new_rulesets(&mut self, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(Vec<u8>, Vec<u8>), Box<dyn Error>> {
+    fn get_new_rulesets(&self, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(Vec<u8>, Vec<u8>), Box<dyn Error>> {
         self.storage.lock().unwrap().set_int(format!("rulesets-timestamp: {}", &update_channel.name), rulesets_timestamp);
 
         // TODO: Use futures to asynchronously fetch signature and rulesets
@@ -158,7 +168,7 @@ impl<'a> Updater<'a> {
     /// * `rulesets_timestamp` - The timestamp for the rulesets, which we use to verify that it
     /// matches the timestamp in the signed rulesets JSON
     /// * `update_channel` - Contains the key which we verify the signatures with
-    fn verify_and_store_new_rulesets(&mut self, signature: Vec<u8>, rulesets: Vec<u8>, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(), Box<dyn Error>> {
+    fn verify_and_store_new_rulesets(&self, signature: Vec<u8>, rulesets: Vec<u8>, rulesets_timestamp: Timestamp, update_channel: &UpdateChannel) -> Result<(), Box<dyn Error>> {
         let update_channel_key = PKey::from_rsa(update_channel.key.clone())?;
         let mut verifier = Verifier::new(MessageDigest::sha256(), &update_channel_key)?;
         verifier.set_rsa_padding(Padding::PKCS1_PSS)?;
@@ -325,7 +335,7 @@ mod tests {
         let update_channels_string = fs::read_to_string("tests/update_channels.json").unwrap();
         let ucs = UpdateChannels::from(&update_channels_string[..]);
 
-        let mut updater = Updater::new(rs, &ucs, s, None, 15);
+        let mut updater = Updater::new(rs, ucs, s, None, 15);
         updater.perform_check();
 
         assert!(rs2.lock().unwrap().count_targets() > 0);
@@ -343,7 +353,7 @@ mod tests {
         let ucs = UpdateChannels::from(&update_channels_string[..]);
 
         let t = thread::spawn(move || {
-            let updater = Updater::new(rs, &ucs, s, None, 15);
+            let updater = Updater::new(rs, ucs, s, None, 15);
             updater.time_to_next_check();
         });
 
