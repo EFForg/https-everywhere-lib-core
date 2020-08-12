@@ -145,10 +145,10 @@ impl Rewriter {
                 self.rewrite_count.fetch_add(1, Ordering::Relaxed);
                 Ok(self.record_history(url, RewriteAction::RewriteUrl(rewritten_url.as_str().to_string())))
             } else {
-                Ok(RewriteAction::NoOp)
+                Ok(self.record_history(url, RewriteAction::NoOp))
             }
         } else {
-            Ok(RewriteAction::NoOp)
+            Ok(self.record_history(url, RewriteAction::NoOp))
         }
     }
 
