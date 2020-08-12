@@ -2,6 +2,7 @@ use lru::LruCache;
 use regex::Regex;
 use std::error::Error;
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+use std::collections::VecDeque;
 
 use url::Url;
 
@@ -11,11 +12,14 @@ use crate::{storage::ThreadSafeStorage, rulesets::{ThreadSafeRuleSets, RuleSet}}
 /// the Rewriter struct
 #[derive(Debug)]
 #[derive(PartialEq)]
+#[derive(Clone)]
 pub enum RewriteAction {
     CancelRequest,
     NoOp,
     RewriteUrl(String),
+    RedirectLoopWarning,
 }
+
 
 /// A Rewriter provides an abstraction layer over RuleSets and Storage, providing the logic for
 /// rewriting URLs
@@ -24,6 +28,7 @@ pub struct Rewriter {
     storage: ThreadSafeStorage,
     rewrite_count: AtomicUsize,
     cookie_host_safety_cache: LruCache<String, bool>,
+    rewrite_history: VecDeque<(String, RewriteAction)>,
 }
 
 impl Rewriter {
@@ -39,6 +44,7 @@ impl Rewriter {
             storage,
             rewrite_count: AtomicUsize::new(0),
             cookie_host_safety_cache: LruCache::new(250), // 250 is somewhat arbitrary
+            rewrite_history: VecDeque::with_capacity(15),
         }
     }
 
@@ -48,7 +54,7 @@ impl Rewriter {
     /// # Arguments
     ///
     /// * `url` - A URL to determine the action for
-    pub fn rewrite_url(&self, url: &str) -> Result<RewriteAction, Box<dyn Error>> {
+    pub fn rewrite_url(&mut self, url: &str) -> Result<RewriteAction, Box<dyn Error>> {
         if let Some(false) = self.storage.lock().unwrap().get_bool(String::from("global_enabled")){
             return Ok(RewriteAction::NoOp);
         }
@@ -122,27 +128,41 @@ impl Rewriter {
 
             if let Some(true) = http_nowhere_on {
                 if should_cancel && new_url.is_none() {
-                    return Ok(RewriteAction::CancelRequest);
+                    return Ok(self.record_history(url, RewriteAction::CancelRequest));
                 }
 
                 // Cancel if we're about to redirect to HTTP or FTP in EASE mode
-                if let Some(url) = &new_url {
-                    if url.as_str().starts_with("http:") ||
-                       url.as_str().starts_with("ftp:") {
-                        return Ok(RewriteAction::CancelRequest);
+                if let Some(rewritten_url) = &new_url {
+                    if rewritten_url.as_str().starts_with("http:") ||
+                       rewritten_url.as_str().starts_with("ftp:") {
+                        return Ok(self.record_history(url, RewriteAction::CancelRequest));
                     }
                 }
             }
 
-            if let Some(url) = new_url {
-                info!("rewrite_url returning redirect url: {}", url.as_str());
+            if let Some(rewritten_url) = new_url {
+                info!("rewrite_url returning redirect url: {}", rewritten_url.as_str());
                 self.rewrite_count.fetch_add(1, Ordering::Relaxed);
-                Ok(RewriteAction::RewriteUrl(url.as_str().to_string()))
+                Ok(self.record_history(url, RewriteAction::RewriteUrl(rewritten_url.as_str().to_string())))
             } else {
                 Ok(RewriteAction::NoOp)
             }
         } else {
             Ok(RewriteAction::NoOp)
+        }
+    }
+
+    /// Helper function which assumes that if we've seen the same rewrite 8 times out of the last
+    /// 15 rewrites, we're probably in a redirect loop and should warn the consumer
+    fn record_history(&mut self, url: Url, action: RewriteAction) -> RewriteAction {
+        self.rewrite_history.truncate(14);
+        self.rewrite_history.push_front((url.as_str().to_string(), action.clone()));
+        if self.rewrite_history.iter().filter(|(history_url, history_action)| {
+            history_url == url.as_str() && history_action == &action
+        }).count() >= 8 {
+            RewriteAction::RedirectLoopWarning
+        } else {
+            action
         }
     }
 
@@ -234,7 +254,7 @@ mod tests {
         let rs = Arc::new(Mutex::new(rs));
 
         let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
-        let rw = Rewriter::new(rs, s);
+        let mut rw = Rewriter::new(rs, s);
 
         assert_eq!(
             rw.rewrite_url("http://freerangekitten.com/").unwrap(),
@@ -252,7 +272,7 @@ mod tests {
         let rs = Arc::new(Mutex::new(rs));
 
         let s: ThreadSafeStorage = Arc::new(Mutex::new(HttpNowhereOnStorage));
-        let rw = Rewriter::new(rs, s);
+        let mut rw = Rewriter::new(rs, s);
 
         assert_eq!(rw.get_rewrite_count(), 0);
 
@@ -286,7 +306,7 @@ mod tests {
         let rs = Arc::new(Mutex::new(rs));
 
         let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
-        let rw = Rewriter::new(rs, s);
+        let mut rw = Rewriter::new(rs, s);
 
         assert_eq!(
             rw.rewrite_url("http://chart.googleapis.com/").unwrap(),
@@ -304,11 +324,33 @@ mod tests {
         let rs = Arc::new(Mutex::new(rs));
 
         let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
-        let rw = Rewriter::new(rs, s);
+        let mut rw = Rewriter::new(rs, s);
 
         assert_eq!(
             rw.rewrite_url("http://eff:techprojects@chart.googleapis.com/123").unwrap(),
             RewriteAction::RewriteUrl(String::from("https://eff:techprojects@chart.googleapis.com/123")));
+    }
+
+    #[test]
+    fn gives_redirect_loop_warning() {
+        let mut rs = RuleSets::new();
+        rulesets_tests::add_mock_rulesets(&mut rs);
+        let rs = Arc::new(Mutex::new(rs));
+
+        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
+        let mut rw = Rewriter::new(rs, s);
+
+        rw.rewrite_url("http://freerangekitten.com/").unwrap();
+        rw.rewrite_url("http://freerangekitten.com/").unwrap();
+        rw.rewrite_url("http://freerangekitten.com/").unwrap();
+        rw.rewrite_url("http://freerangekitten.com/").unwrap();
+        rw.rewrite_url("http://freerangekitten.com/").unwrap();
+        rw.rewrite_url("http://freerangekitten.com/").unwrap();
+        rw.rewrite_url("http://freerangekitten.com/").unwrap();
+
+        assert_eq!(
+            rw.rewrite_url("http://freerangekitten.com/").unwrap(),
+            RewriteAction::RedirectLoopWarning);
     }
 
     #[test]
