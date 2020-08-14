@@ -4,7 +4,7 @@ use std::error::Error;
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 use std::collections::VecDeque;
 
-use url::Url;
+use url::{Host, Url};
 
 use crate::{settings::ThreadSafeSettings, rulesets::{ThreadSafeRuleSets, RuleSet}};
 
@@ -66,6 +66,10 @@ impl Rewriter {
                 hostname = ".";
             }
             let hostname = hostname.to_string();
+
+            if self.settings.lock().unwrap().get_site_disabled(&Host::parse(&hostname)?) {
+                return Ok(RewriteAction::NoOp);
+            }
 
             let mut should_cancel = false;
             let http_nowhere_on = self.settings.lock().unwrap().get_ease_mode_enabled_or(false);

@@ -1,8 +1,14 @@
 use crate::storage::{ThreadSafeStorage};
+use serde_json::Value;
+use crate::strings::ERROR_SERDE_PARSE;
+use std::collections::HashSet;
+use std::iter::FromIterator;
+use url::Host;
 
 /// A high-level abstracton over the storage object which sets and gets global settings
 pub struct Settings {
     pub storage: ThreadSafeStorage,
+    sites_disabled: HashSet<Host>
 }
 
 use std::sync::{Arc, Mutex};
@@ -15,7 +21,9 @@ impl Settings {
     ///
     /// * `storage` - The storage engine for key-value pairs, wrapped in an Arc<Mutex>
     pub fn new(storage: ThreadSafeStorage) -> Settings {
-        Settings { storage }
+        let mut settings = Settings { storage, sites_disabled: HashSet::new() };
+        settings.load_sites_disabled();
+        settings
     }
 
     /// Retrieve whether HTTPS Everywhere is enabled
@@ -56,6 +64,51 @@ impl Settings {
         self.storage.lock().unwrap().set_bool(String::from("http_nowhere_on"), value);
     }
 
+    /// Load the sites that are disabled from the storage engine
+    fn load_sites_disabled(&mut self) {
+        self.sites_disabled = match self.storage.lock().unwrap().get_string(String::from("sites_disabled")) {
+            Some(sites_disabled_string) => {
+                if let Value::Array(sites_disabled) = serde_json::from_str(&sites_disabled_string).expect(ERROR_SERDE_PARSE) {
+                    HashSet::from_iter(sites_disabled.iter().filter_map(|site_disabled_json| {
+                        match site_disabled_json {
+                            Value::String(site_disabled) => Some(Host::parse(site_disabled).unwrap()),
+                            _ => None
+                        }
+                    }))
+                } else {
+                    panic!("Unexpected: disabled sites is not an array");
+                }
+            },
+            None => HashSet::new()
+        }
+    }
+
+    /// Store the sites that are disabled to the storage engine
+    fn store_sites_disabled(&mut self) {
+        let sites_disabled_json: Value = self.sites_disabled.iter().map(|site_disabled| Value::String(site_disabled.to_string())).collect();
+        self.storage.lock().unwrap().set_string(String::from("sites_disabled"), sites_disabled_json.to_string());
+    }
+
+
+    /// Provide a Url::Host object to disable or enable a site
+    pub fn set_site_disabled(&mut self, site: Host, set_disabled: bool) {
+        let currently_disabled = self.get_site_disabled(&site);
+        if currently_disabled && !set_disabled {
+            self.sites_disabled.remove(&site);
+            self.store_sites_disabled();
+        } else if !currently_disabled && set_disabled {
+            self.sites_disabled.insert(site);
+            self.store_sites_disabled();
+        }
+    }
+
+    pub fn get_site_disabled(&self, site: &Host) -> bool {
+       self.sites_disabled.contains(site)
+    }
+
+    pub fn get_sites_disabled(&self) -> &HashSet<Host> {
+        &self.sites_disabled
+    }
 }
 
 #[cfg(test)]
