@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 
 use url::Url;
 
-use crate::{storage::ThreadSafeStorage, rulesets::{ThreadSafeRuleSets, RuleSet}};
+use crate::{settings::ThreadSafeSettings, rulesets::{ThreadSafeRuleSets, RuleSet}};
 
 /// A RewriteAction is used to indicate an action to take, returned by the rewrite_url method on
 /// the Rewriter struct
@@ -21,27 +21,27 @@ pub enum RewriteAction {
 }
 
 
-/// A Rewriter provides an abstraction layer over RuleSets and Storage, providing the logic for
+/// A Rewriter provides an abstraction layer over RuleSets and Settings, providing the logic for
 /// rewriting URLs
 pub struct Rewriter {
     rulesets: ThreadSafeRuleSets,
-    storage: ThreadSafeStorage,
+    settings: ThreadSafeSettings,
     rewrite_count: AtomicUsize,
     cookie_host_safety_cache: LruCache<String, bool>,
     rewrite_history: VecDeque<(String, RewriteAction)>,
 }
 
 impl Rewriter {
-    /// Returns a rewriter with the rulesets and storage engine specified
+    /// Returns a rewriter with the rulesets and settings specified
     ///
     /// # Arguments
     ///
     /// * `rulesets` - An instance of RuleSets for rewriting URLs, wrapped in an Arc<Mutex>
-    /// * `storage` - A storage object to query current state, wrapped in an Arc<Mutex>
-    pub fn new(rulesets: ThreadSafeRuleSets, storage: ThreadSafeStorage) -> Rewriter {
+    /// * `settings` - A settings object to query current state, wrapped in an Arc<Mutex>
+    pub fn new(rulesets: ThreadSafeRuleSets, settings: ThreadSafeSettings) -> Rewriter {
         Rewriter {
             rulesets,
-            storage,
+            settings,
             rewrite_count: AtomicUsize::new(0),
             cookie_host_safety_cache: LruCache::new(250), // 250 is somewhat arbitrary
             rewrite_history: VecDeque::with_capacity(15),
@@ -55,7 +55,7 @@ impl Rewriter {
     ///
     /// * `url` - A URL to determine the action for
     pub fn rewrite_url(&mut self, url: &str) -> Result<RewriteAction, Box<dyn Error>> {
-        if let Some(false) = self.storage.lock().unwrap().get_bool(String::from("global_enabled")){
+        if !self.settings.lock().unwrap().get_https_everywhere_enabled_or(true) {
             return Ok(RewriteAction::NoOp);
         }
 
@@ -68,8 +68,8 @@ impl Rewriter {
             let hostname = hostname.to_string();
 
             let mut should_cancel = false;
-            let http_nowhere_on = self.storage.lock().unwrap().get_bool(String::from("http_nowhere_on"));
-            if let Some(true) = http_nowhere_on {
+            let http_nowhere_on = self.settings.lock().unwrap().get_ease_mode_enabled_or(false);
+            if http_nowhere_on {
                 if url.scheme() == "http" || url.scheme() == "ftp" {
                     let num_localhost = Regex::new(r"^127(\.[0-9]{1,3}){3}$").unwrap();
                     if !hostname.ends_with(".onion") &&
@@ -126,7 +126,7 @@ impl Rewriter {
                 }
             }
 
-            if let Some(true) = http_nowhere_on {
+            if http_nowhere_on {
                 if should_cancel && new_url.is_none() {
                     return Ok(self.record_history(url, RewriteAction::CancelRequest));
                 }
@@ -244,6 +244,7 @@ mod tests {
     use std::{panic, thread};
     use std::sync::Mutex;
     use crate::RuleSets;
+    use crate::Settings;
     use crate::storage::tests::mock_storage::{TestStorage, HttpNowhereOnStorage};
     use crate::rulesets::tests as rulesets_tests;
 
@@ -253,7 +254,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeSettings = Arc::new(Mutex::new(Settings::new(Arc::new(Mutex::new(TestStorage)))));
         let mut rw = Rewriter::new(rs, s);
 
         assert_eq!(
@@ -271,7 +272,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: ThreadSafeStorage = Arc::new(Mutex::new(HttpNowhereOnStorage));
+        let s: ThreadSafeSettings = Arc::new(Mutex::new(Settings::new(Arc::new(Mutex::new(HttpNowhereOnStorage)))));
         let mut rw = Rewriter::new(rs, s);
 
         assert_eq!(rw.get_rewrite_count(), 0);
@@ -305,7 +306,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeSettings = Arc::new(Mutex::new(Settings::new(Arc::new(Mutex::new(TestStorage)))));
         let mut rw = Rewriter::new(rs, s);
 
         assert_eq!(
@@ -323,7 +324,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeSettings = Arc::new(Mutex::new(Settings::new(Arc::new(Mutex::new(TestStorage)))));
         let mut rw = Rewriter::new(rs, s);
 
         assert_eq!(
@@ -337,7 +338,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeSettings = Arc::new(Mutex::new(Settings::new(Arc::new(Mutex::new(TestStorage)))));
         let mut rw = Rewriter::new(rs, s);
 
         rw.rewrite_url("http://freerangekitten.com/").unwrap();
@@ -359,7 +360,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeSettings = Arc::new(Mutex::new(Settings::new(Arc::new(Mutex::new(TestStorage)))));
         let mut rw = Rewriter::new(rs, s);
 
         assert_eq!(rw.should_secure_cookie("maps.gstatic.com", "some_google_cookie"), true);
@@ -371,7 +372,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeSettings = Arc::new(Mutex::new(Settings::new(Arc::new(Mutex::new(TestStorage)))));
         let mut rw = Rewriter::new(rs, s);
 
         assert_eq!(rw.should_secure_cookie("example.com", "some_example_cookie"), false);
@@ -383,7 +384,7 @@ mod tests {
         rulesets_tests::add_mock_rulesets(&mut rs);
         let rs = Arc::new(Mutex::new(rs));
 
-        let s: ThreadSafeStorage = Arc::new(Mutex::new(TestStorage));
+        let s: ThreadSafeSettings = Arc::new(Mutex::new(Settings::new(Arc::new(Mutex::new(TestStorage)))));
 
         let t = thread::spawn(move || {
             let rw = Rewriter::new(rs, s);

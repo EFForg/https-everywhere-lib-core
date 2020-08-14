@@ -9,8 +9,8 @@ repository = "https://github.com/efforg/https-everywhere-lib-core"
 readme = "README.md"
 
 [features]
-default = ["updater", "rewriter", "settings", "get_simple_rules_ending_with"]
-rewriter = ["url", "regex", "lazy_static", "log", "potentially_applicable", "lru"]
+default = ["updater", "rewriter", "get_simple_rules_ending_with"]
+rewriter = ["url", "regex", "lazy_static", "log", "potentially_applicable", "lru", "settings"]
 updater = ["add_rulesets", "openssl", "http_req", "log", "flate2", "lazy_static"]
 add_rulesets = ["serde_json"]
 potentially_applicable = []

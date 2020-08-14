@@ -1,9 +1,12 @@
-use crate::storage::ThreadSafeStorage;
+use crate::storage::{ThreadSafeStorage};
 
 /// A high-level abstracton over the storage object which sets and gets global settings
 pub struct Settings {
-    storage: ThreadSafeStorage,
+    pub storage: ThreadSafeStorage,
 }
+
+use std::sync::{Arc, Mutex};
+pub type ThreadSafeSettings = Arc<Mutex<Settings>>;
 
 impl Settings {
     /// Returns a struct for retrieving and storing global settings
