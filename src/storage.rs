@@ -28,7 +28,13 @@ pub mod tests {
         impl Storage for DefaultStorage {
             fn get_int(&self, _key: String) -> Option<usize> { Some(5) }
             fn set_int(&mut self, _key: String, _value: usize) {}
-            fn get_string(&self, _key: String) -> Option<String> { Some(String::from("test")) }
+            fn get_string(&self, key: String) -> Option<String> {
+                if key == String::from("sites_disabled") {
+                    None
+                } else {
+                    Some(String::from("test"))
+                }
+            }
             fn set_string(&mut self, _key: String, _value: String) {}
             fn get_bool(&self, key: String) -> Option<bool> {
                 if key == String::from("http_nowhere_on") {
