@@ -6,8 +6,12 @@ use std::iter::FromIterator;
 use url::Host;
 
 /// A high-level abstracton over the storage object which sets and gets global settings
+/// `enabled` and `ease` are cached settings, wrapped in the first-layer `Option` for whether they
+/// are cached or not, and the second-layer `Option` for wheter they exist in `storage` or not.
 pub struct Settings {
     pub storage: ThreadSafeStorage,
+    enabled: Option<Option<bool>>,
+    ease: Option<Option<bool>>,
     sites_disabled: HashSet<Host>
 }
 
@@ -21,20 +25,28 @@ impl Settings {
     ///
     /// * `storage` - The storage engine for key-value pairs, wrapped in an Arc<Mutex>
     pub fn new(storage: ThreadSafeStorage) -> Settings {
-        let mut settings = Settings { storage, sites_disabled: HashSet::new() };
+        let mut settings = Settings { storage, enabled: None, ease: None, sites_disabled: HashSet::new() };
         settings.load_sites_disabled();
         settings
     }
 
+    fn cache_enabled(&mut self) {
+        if self.enabled.is_none() {
+            self.enabled = Some(self.storage.lock().unwrap().get_bool(String::from("global_enabled")));
+        }
+    }
+
     /// Retrieve whether HTTPS Everywhere is enabled
-    pub fn get_https_everywhere_enabled(&self) -> Option<bool> {
-        self.storage.lock().unwrap().get_bool(String::from("global_enabled"))
+    pub fn get_https_everywhere_enabled(&mut self) -> Option<bool> {
+        self.cache_enabled();
+        self.enabled.unwrap()
     }
 
     /// Retrieve whether HTTPS Everywhere is enabled. If no value is able to be retrieved, return
     /// the default value provided
-    pub fn get_https_everywhere_enabled_or(&self, default: bool) -> bool {
-        match self.storage.lock().unwrap().get_bool(String::from("global_enabled")) {
+    pub fn get_https_everywhere_enabled_or(&mut self, default: bool) -> bool {
+        self.cache_enabled();
+        match self.enabled.unwrap() {
             Some(value) => value,
             None => default,
         }
@@ -43,17 +55,26 @@ impl Settings {
     /// Set HTTPS Everywhere to enabled or disabled
     pub fn set_https_everywhere_enabled(&mut self, value: bool) {
         self.storage.lock().unwrap().set_bool(String::from("global_enabled"), value);
+        self.enabled = Some(Some(value));
+    }
+
+    fn cache_ease(&mut self) {
+        if self.ease.is_none() {
+            self.ease = Some(self.storage.lock().unwrap().get_bool(String::from("http_nowhere_on")));
+        }
     }
 
     /// Retrieve whether EASE (Encrypt All Sites Eligible) mode is enabled
-    pub fn get_ease_mode_enabled(&self) -> Option<bool> {
-        self.storage.lock().unwrap().get_bool(String::from("http_nowhere_on"))
+    pub fn get_ease_mode_enabled(&mut self) -> Option<bool> {
+        self.cache_ease();
+        self.ease.unwrap()
     }
 
     /// Retrieve whether EASE (Encrypt All Sites Eligible) mode is enabled. If no value is able to
     /// be retrieved, return the default value provided
-    pub fn get_ease_mode_enabled_or(&self, default: bool) -> bool {
-        match self.storage.lock().unwrap().get_bool(String::from("http_nowhere_on")) {
+    pub fn get_ease_mode_enabled_or(&mut self, default: bool) -> bool {
+        self.cache_ease();
+        match self.ease.unwrap() {
             Some(value) => value,
             None => default,
         }
@@ -62,6 +83,7 @@ impl Settings {
     /// Set EASE (Encrypt All Sites Eligible) mode to enabled or disabled
     pub fn set_ease_mode_enabled(&mut self, value: bool) {
         self.storage.lock().unwrap().set_bool(String::from("http_nowhere_on"), value);
+        self.ease = Some(Some(value));
     }
 
     /// Load the sites that are disabled from the storage engine
@@ -127,7 +149,7 @@ mod tests{
 
     #[test]
     fn gets_with_default() {
-        let settings = Settings::new(Arc::new(Mutex::new(WorkingTempStorage::new())));
+        let mut settings = Settings::new(Arc::new(Mutex::new(WorkingTempStorage::new())));
         assert_eq!(settings.get_ease_mode_enabled_or(false), false);
     }
 
