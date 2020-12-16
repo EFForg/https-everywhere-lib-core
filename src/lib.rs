@@ -32,6 +32,6 @@ extern crate log;
 
 mod strings;
 
-#[cfg(any(all(test,feature="add_rulesets"),feature="updater",feature="rewriter"))]
+#[cfg(any(all(test,feature="add_rulesets"),feature="updater"))]
 #[macro_use]
 extern crate lazy_static;
