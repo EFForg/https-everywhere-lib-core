@@ -147,6 +147,7 @@ dependencies = [
 name = "https-everywhere-lib-core"
 version = "0.1.2"
 dependencies = [
+ "cfg-if 1.0.0",
  "flate2",
  "http_req",
  "lazy_static",
