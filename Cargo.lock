@@ -28,10 +28,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
+name = "bit-vec"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
+
+[[package]]
 name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
+
+[[package]]
+name = "bloomfilter"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6437fb0cbb35301d1ca48d584e7e035823a4b34163924a35cd80d12ec3358a7"
+dependencies = [
+ "bit-vec",
+ "rand",
+ "siphasher",
+]
 
 [[package]]
 name = "cc"
@@ -147,6 +164,7 @@ dependencies = [
 name = "https-everywhere-lib-core"
 version = "0.1.2"
 dependencies = [
+ "bloomfilter",
  "cfg-if 1.0.0",
  "flate2",
  "http_req",
@@ -457,6 +475,12 @@ dependencies = [
  "ryu",
  "serde",
 ]
+
+[[package]]
+name = "siphasher"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa8f3741c7372e75519bd9346068370c9cdaabcc1f9599cbcf2a2719352286b7"
 
 [[package]]
 name = "syn"

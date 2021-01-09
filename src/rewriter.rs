@@ -1,12 +1,14 @@
 use lru::LruCache;
 use regex::Regex;
 use std::error::Error;
-use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+use std::sync::{Arc, atomic::{AtomicUsize, Ordering}, Mutex};
 use std::collections::VecDeque;
 
 use url::{Host, Url};
 
 use crate::{settings::ThreadSafeSettings, rulesets::{ThreadSafeRuleSets, RuleSet}};
+
+pub type ThreadSafeBloom = Arc<Mutex<bloomfilter::Bloom<str>>>;
 
 /// A RewriteAction is used to indicate an action to take, returned by the rewrite_url method on
 /// the Rewriter struct
@@ -25,6 +27,7 @@ pub enum RewriteAction {
 /// rewriting URLs
 pub struct Rewriter {
     rulesets: ThreadSafeRuleSets,
+    bloom: Option<ThreadSafeBloom>,
     settings: ThreadSafeSettings,
     rewrite_count: AtomicUsize,
     cookie_host_safety_cache: LruCache<String, bool>,
@@ -41,6 +44,7 @@ impl Rewriter {
     pub fn new(rulesets: ThreadSafeRuleSets, settings: ThreadSafeSettings) -> Rewriter {
         Rewriter {
             rulesets,
+            bloom: None,
             settings,
             rewrite_count: AtomicUsize::new(0),
             cookie_host_safety_cache: LruCache::new(250), // 250 is somewhat arbitrary
@@ -114,6 +118,14 @@ impl Rewriter {
                     }
                 } else {
                     apply_if_active(&ruleset);
+                }
+            }
+
+            if new_url.is_none() && self.bloom.is_some() && (url.scheme() == "http" || url.scheme() == "ftp") {
+                if self.bloom.as_ref().unwrap().lock().unwrap().check(&hostname) {
+                    let mut new_url_tmp = url.clone();
+                    new_url_tmp.set_scheme("https").unwrap();
+                    new_url = Some(new_url_tmp);
                 }
             }
 
@@ -242,15 +254,43 @@ impl Rewriter {
     }
 }
 
+pub trait NewRewriterWithBloom {
+    fn new(rulesets: ThreadSafeRuleSets, settings: ThreadSafeSettings, bloom: ThreadSafeBloom) -> Rewriter;
+}
+
+impl NewRewriterWithBloom for Rewriter {
+    /// Returns a rewriter with the rulesets, settings, and upgrade bloom filter specified
+    ///
+    /// # Arguments
+    ///
+    /// * `rulesets` - An instance of RuleSets for rewriting URLs, wrapped in an Arc<Mutex>
+    /// * `settings` - A settings object to query current state, wrapped in an Arc<Mutex>
+    /// * `bloom` - A bloomfilter::Bloom filter of upgradeable domains, wrapped in an Arc<Mutex>
+    fn new(rulesets: ThreadSafeRuleSets, settings: ThreadSafeSettings, bloom: ThreadSafeBloom) -> Rewriter {
+        Rewriter {
+            rulesets,
+            bloom: Some(bloom),
+            settings,
+            rewrite_count: AtomicUsize::new(0),
+            cookie_host_safety_cache: LruCache::new(250), // 250 is somewhat arbitrary
+            rewrite_history: VecDeque::with_capacity(15),
+        }
+    }
+}
+
+
 #[cfg(all(test,feature="add_rulesets"))]
 mod tests {
     use super::*;
+    use bloomfilter::Bloom;
+    use std::fs;
     use std::{panic, thread};
     use std::sync::Mutex;
     use crate::RuleSets;
     use crate::Settings;
     use crate::storage::tests::mock_storage::{TestStorage, HttpNowhereOnStorage};
     use crate::rulesets::tests as rulesets_tests;
+
 
     #[test]
     fn rewrite_url() {
@@ -334,6 +374,43 @@ mod tests {
         assert_eq!(
             rw.rewrite_url("http://eff:techprojects@chart.googleapis.com/123").unwrap(),
             RewriteAction::RewriteUrl(String::from("https://eff:techprojects@chart.googleapis.com/123")));
+    }
+
+    #[test]
+    fn no_rewrite_without_bloom() {
+        let mut rs = RuleSets::new();
+        rulesets_tests::add_mock_rulesets(&mut rs);
+        let rs = Arc::new(Mutex::new(rs));
+
+        let s: ThreadSafeSettings = Arc::new(Mutex::new(Settings::new(Arc::new(Mutex::new(TestStorage)))));
+        let mut rw = Rewriter::new(rs, s);
+
+        assert_eq!(
+            rw.rewrite_url("http://example.com/").unwrap(),
+            RewriteAction::NoOp);
+    }
+
+    #[test]
+    fn rewrite_from_bloom() {
+        let mut rs = RuleSets::new();
+        rulesets_tests::add_mock_rulesets(&mut rs);
+        let rs = Arc::new(Mutex::new(rs));
+
+        let s: ThreadSafeSettings = Arc::new(Mutex::new(Settings::new(Arc::new(Mutex::new(TestStorage)))));
+        let b: ThreadSafeBloom = Arc::new(Mutex::new(Bloom::from_existing(&fs::read("tests/hosts.bf").unwrap(), 32, 8, [(14665750518300404984, 12873651473193462006), (9973946878825591628, 7119699906358194664)])));
+        let mut rw = <Rewriter as NewRewriterWithBloom>::new(rs, s, b);
+
+        assert_eq!(
+            rw.rewrite_url("http://example.com/").unwrap(),
+            RewriteAction::RewriteUrl(String::from("https://example.com/")));
+
+        assert_eq!(
+            rw.rewrite_url("http://weather.example.com/").unwrap(),
+            RewriteAction::NoOp);
+
+        assert_eq!(
+            rw.rewrite_url("http://news.example.com/").unwrap(),
+            RewriteAction::RewriteUrl(String::from("https://news.example.com/")));
     }
 
     #[test]
