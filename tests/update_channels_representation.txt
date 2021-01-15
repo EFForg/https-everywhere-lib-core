@@ -1,1 +1,1 @@
-UpdateChannels([UpdateChannel { name: "EFF (Full)", key: Rsa, update_path_prefix: "https://www.https-rulesets.org/v1/", scope: None, replaces_default_rulesets: true }])
+UpdateChannels([UpdateChannel { name: "EFF (Full)", format: RuleSets, key: Rsa, update_path_prefix: "https://www.https-rulesets.org/v1/", scope: None, replaces_default_rulesets: true }])

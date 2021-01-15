@@ -4,6 +4,7 @@ use crate::strings::ERROR_SERDE_PARSE;
 
 struct StaticJsonStrings {
     pub name: &'static str,
+    pub format: &'static str,
     pub update_path_prefix: &'static str,
     pub scope: &'static str,
     pub replaces_default_rulesets: &'static str,
@@ -12,12 +13,19 @@ struct StaticJsonStrings {
 
 const JSON_STRINGS: StaticJsonStrings = StaticJsonStrings {
     name: "name",
+    format: "format",
     update_path_prefix: "update_path_prefix",
     scope: "scope",
     replaces_default_rulesets: "replaces_default_rulesets",
     pem: "pem",
 };
 
+#[derive(Debug)]
+#[derive(PartialEq)]
+pub enum UpdateChannelFormat {
+    RuleSets,
+    Bloom,
+}
 
 /// An UpdateChannel defines where to find ruleset updates, the key to verify them, the scope they
 /// are applied to (which should be a regular expression), and whether they replace the default
@@ -25,6 +33,7 @@ const JSON_STRINGS: StaticJsonStrings = StaticJsonStrings {
 #[derive(Debug)]
 pub struct UpdateChannel {
     pub name: String,
+    pub format: UpdateChannelFormat,
     pub key: Rsa<Public>,
     pub update_path_prefix: String,
     pub scope: Option<String>,
@@ -59,6 +68,16 @@ impl From<&Value> for UpdateChannel {
                 Some(Value::String(name)) => name.to_string(),
                 _ => panic!("Name can not be blank")
             };
+            let format = match update_channel.get(JSON_STRINGS.format) {
+                Some(Value::String(format)) => {
+                    if format == "bloom" {
+                        UpdateChannelFormat::Bloom
+                    } else {
+                        UpdateChannelFormat::RuleSets
+                    }
+                },
+                _ => UpdateChannelFormat::RuleSets,
+            };
             let update_path_prefix = match update_channel.get(JSON_STRINGS.update_path_prefix) {
                 Some(Value::String(update_path_prefix)) => update_path_prefix.to_string(),
                 _ => panic!("Update path prefix can not be blank")
@@ -83,6 +102,7 @@ impl From<&Value> for UpdateChannel {
             };
             UpdateChannel {
                 name,
+                format,
                 key,
                 update_path_prefix,
                 scope,

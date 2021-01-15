@@ -27,7 +27,7 @@ pub enum RewriteAction {
 /// rewriting URLs
 pub struct Rewriter {
     rulesets: ThreadSafeRuleSets,
-    bloom: Option<ThreadSafeBloom>,
+    blooms: Vec<ThreadSafeBloom>,
     settings: ThreadSafeSettings,
     rewrite_count: AtomicUsize,
     cookie_host_safety_cache: LruCache<String, bool>,
@@ -44,7 +44,7 @@ impl Rewriter {
     pub fn new(rulesets: ThreadSafeRuleSets, settings: ThreadSafeSettings) -> Rewriter {
         Rewriter {
             rulesets,
-            bloom: None,
+            blooms: Vec::new(),
             settings,
             rewrite_count: AtomicUsize::new(0),
             cookie_host_safety_cache: LruCache::new(250), // 250 is somewhat arbitrary
@@ -121,11 +121,14 @@ impl Rewriter {
                 }
             }
 
-            if new_url.is_none() && self.bloom.is_some() && (url.scheme() == "http" || url.scheme() == "ftp") {
-                if self.bloom.as_ref().unwrap().lock().unwrap().check(&hostname) {
-                    let mut new_url_tmp = url.clone();
-                    new_url_tmp.set_scheme("https").unwrap();
-                    new_url = Some(new_url_tmp);
+            if new_url.is_none() && self.blooms.len() > 0 && (url.scheme() == "http" || url.scheme() == "ftp") {
+                for bloom in self.blooms.iter() {
+                    if bloom.lock().unwrap().check(&hostname) {
+                        let mut new_url_tmp = url.clone();
+                        new_url_tmp.set_scheme("https").unwrap();
+                        new_url = Some(new_url_tmp);
+                        break;
+                    }
                 }
             }
 
@@ -255,7 +258,7 @@ impl Rewriter {
 }
 
 pub trait NewRewriterWithBloom {
-    fn new(rulesets: ThreadSafeRuleSets, settings: ThreadSafeSettings, bloom: ThreadSafeBloom) -> Rewriter;
+    fn new(rulesets: ThreadSafeRuleSets, settings: ThreadSafeSettings, blooms: Vec<ThreadSafeBloom>) -> Rewriter;
 }
 
 impl NewRewriterWithBloom for Rewriter {
@@ -265,11 +268,11 @@ impl NewRewriterWithBloom for Rewriter {
     ///
     /// * `rulesets` - An instance of RuleSets for rewriting URLs, wrapped in an Arc<Mutex>
     /// * `settings` - A settings object to query current state, wrapped in an Arc<Mutex>
-    /// * `bloom` - A bloomfilter::Bloom filter of upgradeable domains, wrapped in an Arc<Mutex>
-    fn new(rulesets: ThreadSafeRuleSets, settings: ThreadSafeSettings, bloom: ThreadSafeBloom) -> Rewriter {
+    /// * `blooms` - A vector of bloomfilter::Bloom filter of upgradeable domains, wrapped in an Arc<Mutex>
+    fn new(rulesets: ThreadSafeRuleSets, settings: ThreadSafeSettings, blooms: Vec<ThreadSafeBloom>) -> Rewriter {
         Rewriter {
             rulesets,
-            bloom: Some(bloom),
+            blooms,
             settings,
             rewrite_count: AtomicUsize::new(0),
             cookie_host_safety_cache: LruCache::new(250), // 250 is somewhat arbitrary
@@ -397,7 +400,7 @@ mod tests {
         let rs = Arc::new(Mutex::new(rs));
 
         let s: ThreadSafeSettings = Arc::new(Mutex::new(Settings::new(Arc::new(Mutex::new(TestStorage)))));
-        let b: ThreadSafeBloom = Arc::new(Mutex::new(Bloom::from_existing(&fs::read("tests/hosts.bf").unwrap(), 32, 8, [(14665750518300404984, 12873651473193462006), (9973946878825591628, 7119699906358194664)])));
+        let b: Vec<ThreadSafeBloom> = [Arc::new(Mutex::new(Bloom::from_existing(&fs::read("tests/hosts.bf").unwrap(), 32, 8, [(14665750518300404984, 12873651473193462006), (9973946878825591628, 7119699906358194664)])))].to_vec();
         let mut rw = <Rewriter as NewRewriterWithBloom>::new(rs, s, b);
 
         assert_eq!(

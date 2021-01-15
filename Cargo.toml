@@ -11,7 +11,7 @@ readme = "README.md"
 [features]
 default = ["updater", "rewriter", "get_simple_rules_ending_with"]
 rewriter = ["url", "regex", "lazy_static", "log", "potentially_applicable", "lru", "settings", "bloomfilter"]
-updater = ["add_rulesets", "openssl", "http_req", "log", "flate2", "lazy_static"]
+updater = ["add_rulesets", "openssl", "http_req", "log", "flate2", "lazy_static", "ring"]
 add_rulesets = ["serde_json"]
 potentially_applicable = []
 get_simple_rules_ending_with = []
@@ -28,6 +28,7 @@ url = { version = "2.0", optional = true }
 regex = { version = "1.1", optional = true }
 lru = { version = "0.6", optional = true }
 bloomfilter = { version = "1.0", optional = true }
+ring = { version = "0.16", optional = true }
 cfg-if = "1.0"
 
 [dev-dependencies]

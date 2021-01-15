@@ -11,6 +11,10 @@ pub trait Storage {
     fn get_bool(&self, key: String) -> Option<bool>;
     /// Set a bool for whatever key-value storage engine implements trait
     fn set_bool(&mut self, key: String, value: bool);
+    /// Get bytes from whatever key-value storage engine implements trait
+    fn get_bytes(&self, key: String) -> Option<Vec<u8>>;
+    /// Set bytes for whatever key-value storage engine implements trait
+    fn set_bytes(&mut self, key: String, value: Vec<u8>);
 }
 
 use std::sync::{Arc, Mutex};
@@ -44,6 +48,8 @@ pub mod tests {
                 }
             }
             fn set_bool(&mut self, _key: String, _value: bool) {}
+            fn get_bytes(&self, _key: String) -> Option<Vec<u8>> { Vec::new(12) }
+            fn set_bytes(&mut self, _key: String, _value: Vec<u8>) {}
         }
 
         pub struct TestStorage;
