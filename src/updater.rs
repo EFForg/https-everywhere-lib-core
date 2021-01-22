@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 type Timestamp = usize;
-pub type ThreadSafeBloom = Arc<Mutex<bloomfilter::Bloom<str>>>;
+pub type ThreadSafeBloomVec = Arc<Mutex<Vec<bloomfilter::Bloom<str>>>>;
 
 #[derive(Debug, Clone)]
 struct UpdaterError {
@@ -50,7 +50,7 @@ impl Error for UpdaterError {
 
 pub struct Updater {
     rulesets: ThreadSafeRuleSets,
-    blooms: Vec<ThreadSafeBloom>,
+    blooms: ThreadSafeBloomVec,
     pub update_channels: UpdateChannels,
     storage: ThreadSafeStorage,
     default_rulesets: Option<String>,
@@ -72,7 +72,7 @@ impl Updater {
     pub fn new(rulesets: ThreadSafeRuleSets, update_channels: UpdateChannels, storage: ThreadSafeStorage, default_rulesets: Option<String>, periodicity: usize) -> Updater {
         Updater {
             rulesets,
-            blooms: Vec::new(),
+            blooms: Arc::new(Mutex::new(vec![])),
             update_channels,
             storage,
             default_rulesets,
@@ -190,7 +190,7 @@ impl Updater {
 
 
         let mut bloom_metadata_writer = Vec::new();
-        let bloom_metadata_res = request::get(update_channel.update_path_prefix.clone() + "/bloom-metadata." + &bloom_timestamp.to_string() + ".txt", &mut bloom_metadata_writer)?;
+        let bloom_metadata_res = request::get(update_channel.update_path_prefix.clone() + "/bloom-metadata." + &bloom_timestamp.to_string() + ".json", &mut bloom_metadata_writer)?;
 
         if !bloom_metadata_res.status_code().is_success() {
             return Err(Box::new(UpdaterError::new(format!("{}: A non-2XX response was returned from the bloom metadata URL", &update_channel.name))));
@@ -362,7 +362,7 @@ impl Updater {
     /// 3. Verify if the signature is valid, and if so...
     /// 4. Store the rulesets
     pub fn perform_check(&mut self) {
-        info!("Checking for new rulesets.");
+        info!("Checking for new updates.");
 
 	self.storage.lock().unwrap().set_int(String::from("last-checked"), Self::current_timestamp());
 
@@ -398,7 +398,7 @@ impl Updater {
         }
 
         for uc in self.update_channels.get_all().iter().filter(|uc| uc.format == UpdateChannelFormat::Bloom) {
-             if let Some(new_bloom_timestamp) = self.check_for_new_updates(uc) {
+            if let Some(new_bloom_timestamp) = self.check_for_new_updates(uc) {
                 info!("{}: A new bloom filter has been released.  Downloading now.", uc.name);
 
                 let (signature, bloom_metadata, bloom) = match self.get_new_bloom(new_bloom_timestamp, uc) {
@@ -487,13 +487,13 @@ impl Updater {
             }
         };
 
-        let mut blooms: Vec<ThreadSafeBloom> = vec![];
+        let mut blooms = self.blooms.lock().unwrap();
+        blooms.clear();
         for uc in self.update_channels.get_all().iter().filter(|uc| uc.format == UpdateChannelFormat::Bloom) {
             if let Ok(bloom) = bloom_closure(uc) {
-                blooms.push(Arc::new(Mutex::new(bloom)));
+                blooms.push(bloom);
             }
         }
-        self.blooms = blooms;
     }
 
     /// Return the time until we should check for new rulesets, in seconds
@@ -518,6 +518,37 @@ impl Updater {
     }
 }
 
+pub trait NewUpdaterWithBloom {
+    fn new(rulesets: ThreadSafeRuleSets, blooms: ThreadSafeBloomVec, update_channels: UpdateChannels, storage: ThreadSafeStorage, default_rulesets: Option<String>, periodicity: usize) -> Updater;
+}
+
+impl NewUpdaterWithBloom for Updater {
+    /// Returns an updater with the rulesets, blooms, update channels, storage, and interval to
+    /// check for new rulesets
+    ///
+    /// # Arguments
+    ///
+    /// * `rulesets` - A ruleset struct to update, wrapped in an Arc<Mutex>
+    /// * `blooms` - A bloom vec to update, wrapped in an Arc<Mutex>
+    /// * `update_channels` - The update channels where to look for new rulesets
+    /// * `storage` - The storage engine for key-value pairs, wrapped in an Arc<Mutex>
+    /// * `default_rulesets` - An optional string representing the default rulesets, which may or
+    /// may not be replaced by updates
+    /// * `periodicity` - The interval to check for new rulesets
+    fn new(rulesets: ThreadSafeRuleSets, blooms: ThreadSafeBloomVec, update_channels: UpdateChannels, storage: ThreadSafeStorage, default_rulesets: Option<String>, periodicity: usize) -> Updater {
+        Updater {
+            rulesets,
+            blooms,
+            update_channels,
+            storage,
+            default_rulesets,
+            periodicity,
+        }
+    }
+}
+
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -532,15 +563,18 @@ mod tests {
         let s: ThreadSafeStorage = Arc::new(Mutex::new(WorkingTempStorage::new()));
         let rs = Arc::new(Mutex::new(RuleSets::new()));
         let rs2 = Arc::clone(&rs);
+        let b: ThreadSafeBloomVec = Arc::new(Mutex::new(Vec::new()));
+        let b2 = Arc::clone(&b);
         assert_eq!(rs2.lock().unwrap().count_targets(), 0);
 
         let update_channels_string = fs::read_to_string("tests/update_channels.json").unwrap();
         let ucs = UpdateChannels::from(&update_channels_string[..]);
 
-        let mut updater = Updater::new(rs, ucs, s, None, 15);
+        let mut updater = <Updater as NewUpdaterWithBloom>::new(rs, b, ucs, s, None, 15);
         updater.perform_check();
 
         assert!(rs2.lock().unwrap().count_targets() > 0);
+        assert!(b2.lock().unwrap()[0].check("news.example.com"), true);
     }
 
     #[test]

@@ -48,7 +48,7 @@ pub mod tests {
                 }
             }
             fn set_bool(&mut self, _key: String, _value: bool) {}
-            fn get_bytes(&self, _key: String) -> Option<Vec<u8>> { Vec::new(12) }
+            fn get_bytes(&self, _key: String) -> Option<Vec<u8>> { Some(vec![12]) }
             fn set_bytes(&mut self, _key: String, _value: Vec<u8>) {}
         }
 
@@ -75,6 +75,7 @@ pub mod tests {
             ints: HashMap<String, usize>,
             bools: HashMap<String, bool>,
             strings: HashMap<String, String>,
+            bytes: HashMap<String, Vec<u8>>,
         }
 
         impl WorkingTempStorage {
@@ -83,6 +84,7 @@ pub mod tests {
                     ints: HashMap::new(),
                     bools: HashMap::new(),
                     strings: HashMap::new(),
+                    bytes: HashMap::new(),
                 }
             }
         }
@@ -109,6 +111,13 @@ pub mod tests {
                 }
             }
 
+            fn get_bytes(&self, key: String) -> Option<Vec<u8>> {
+                match self.bytes.get(&key) {
+                    Some(value) => Some(value.clone()),
+                    None => None
+                }
+            }
+
             fn set_int(&mut self, key: String, value: usize) {
                 self.ints.insert(key, value);
             }
@@ -119,6 +128,10 @@ pub mod tests {
 
             fn set_string(&mut self, key: String, value: String) {
                 self.strings.insert(key, value);
+            }
+
+            fn set_bytes(&mut self, key: String, value: Vec<u8>) {
+                self.bytes.insert(key, value);
             }
         }
     }
