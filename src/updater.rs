@@ -87,7 +87,7 @@ impl Updater {
         current_timestamp as Timestamp
     }
 
-    /// Returns an `Option<i32>` optional timestamp if there are new updates.  If no new updates 
+    /// Returns an `Option<i32>` optional timestamp if there are new updates.  If no new updates
     /// are available, or if there is a failure for any reason, return `None`
     ///
     /// # Arguments
@@ -319,11 +319,11 @@ impl Updater {
                 },
             };
             let (sip_keys_0_0, sip_keys_0_1) = match sip_keys_0.as_slice() {
-                [Value::Number(sip_keys_0_0), Value::Number(sip_keys_0_1)] if sip_keys_0_0.is_u64() && sip_keys_0_1.is_u64() => {
-                    (sip_keys_0_0.as_u64().unwrap(), sip_keys_0_1.as_u64().unwrap())
+                [Value::String(sip_keys_0_0), Value::String(sip_keys_0_1)] if sip_keys_0_0.parse::<u64>().is_ok() && sip_keys_0_1.parse::<u64>().is_ok() => {
+                    (sip_keys_0_0.parse::<u64>().unwrap(), sip_keys_0_1.parse::<u64>().unwrap())
                 }
                 _ => {
-                    return Err(Box::new(UpdaterError::new(format!("{}: `sip_keys[0]` is not in the format [Number, Number]", &update_channel.name))));
+                    return Err(Box::new(UpdaterError::new(format!("{}: `sip_keys[0]` is not in the format [String(Number), String(Number)]", &update_channel.name))));
                 },
             };
             let sip_keys_1 = match &sip_keys[1] {
@@ -333,11 +333,11 @@ impl Updater {
                 },
             };
             let (sip_keys_1_0, sip_keys_1_1) = match sip_keys_1.as_slice() {
-                [Value::Number(sip_keys_1_0), Value::Number(sip_keys_1_1)] if sip_keys_1_0.is_u64() && sip_keys_1_1.is_u64() => {
-                    (sip_keys_1_0.as_u64().unwrap(), sip_keys_1_1.as_u64().unwrap())
+                [Value::String(sip_keys_1_0), Value::String(sip_keys_1_1)] if sip_keys_1_0.parse::<u64>().is_ok() && sip_keys_1_1.parse::<u64>().is_ok() => {
+                    (sip_keys_1_0.parse::<u64>().unwrap(), sip_keys_1_1.parse::<u64>().unwrap())
                 }
                 _ => {
-                    return Err(Box::new(UpdaterError::new(format!("{}: `sip_keys[0]` is not in the format [Number, Number]", &update_channel.name))));
+                    return Err(Box::new(UpdaterError::new(format!("{}: `sip_keys[0]` is not in the format [String(Number), String(Number)]", &update_channel.name))));
                 },
             };
 
