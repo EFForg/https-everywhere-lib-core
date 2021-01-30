@@ -420,16 +420,16 @@ impl Updater {
         }
 
         if some_updated {
-            self.apply_stored_rulesets();
+            self.apply_stored_updates();
         }
     }
 
-    /// Modify rulesets struct to apply the stored rulesets
-    pub fn apply_stored_rulesets(&mut self) {
+    /// Modify underlying rulesets or bloom structs to apply the stored updates
+    pub fn apply_stored_updates(&mut self) {
         type OkRuleSetsResult = (Value, Option<String>, bool);
         type OkBloomResult = bloomfilter::Bloom<str>;
 
-        // TODO: Use futures to asynchronously apply stored rulesets
+        // TODO: Use futures to asynchronously apply stored updates
         let rulesets_closure = |uc: &UpdateChannel| -> Result<OkRuleSetsResult, Box<dyn Error>> {
             match self.storage.lock().unwrap().get_string(format!("rulesets: {}", &uc.name)) {
                 Some(rulesets_json_string) => {
@@ -510,8 +510,8 @@ impl Updater {
     pub fn clear_replacement_update_channels(&self) {
         for uc in self.update_channels.get_all() {
             if uc.replaces_default_rulesets {
-                self.storage.lock().unwrap().set_int(format!("rulesets-timestamp: {}", &uc.name), 0);
-                self.storage.lock().unwrap().set_int(format!("rulesets-stored-timestamp: {}", &uc.name), 0);
+                self.storage.lock().unwrap().set_int(format!("uc-timestamp: {}", &uc.name), 0);
+                self.storage.lock().unwrap().set_int(format!("uc-stored-timestamp: {}", &uc.name), 0);
                 self.storage.lock().unwrap().set_string(format!("rulesets: {}", &uc.name), String::from(""));
             }
         }

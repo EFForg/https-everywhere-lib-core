@@ -121,7 +121,7 @@ impl Rewriter {
                 }
             }
 
-            if new_url.is_none() && self.blooms.lock().unwrap().len() > 0 && (url.scheme() == "http" || url.scheme() == "ftp") {
+            if new_url.is_none() && self.blooms.lock().unwrap().len() > 0 && url.scheme() == "http" {
                 for bloom in self.blooms.lock().unwrap().iter() {
                     if bloom.check(&hostname) {
                         let mut new_url_tmp = url.clone();
