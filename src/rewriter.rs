@@ -287,7 +287,7 @@ mod tests {
     use super::*;
     use bloomfilter::Bloom;
     use std::fs;
-    use std::{panic, thread};
+    use std::thread;
     use std::sync::Mutex;
     use crate::RuleSets;
     use crate::Settings;

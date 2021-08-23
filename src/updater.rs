@@ -574,7 +574,7 @@ mod tests {
         updater.perform_check();
 
         assert!(rs2.lock().unwrap().count_targets() > 0);
-        assert!(b2.lock().unwrap()[0].check("news.example.com"), true);
+        assert_eq!(b2.lock().unwrap()[0].check("news.example.com"), true);
     }
 
     #[test]
