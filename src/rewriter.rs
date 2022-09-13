@@ -1,6 +1,7 @@
 use lru::LruCache;
 use regex::Regex;
 use std::error::Error;
+use std::num::NonZeroUsize;
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering}, Mutex};
 use std::collections::VecDeque;
 
@@ -47,7 +48,7 @@ impl Rewriter {
             blooms: Arc::new(Mutex::new(vec![])),
             settings,
             rewrite_count: AtomicUsize::new(0),
-            cookie_host_safety_cache: LruCache::new(250), // 250 is somewhat arbitrary
+            cookie_host_safety_cache: LruCache::new(NonZeroUsize::new(250).unwrap()), // 250 is somewhat arbitrary
             rewrite_history: VecDeque::with_capacity(15),
         }
     }
@@ -275,7 +276,7 @@ impl NewRewriterWithBloom for Rewriter {
             blooms,
             settings,
             rewrite_count: AtomicUsize::new(0),
-            cookie_host_safety_cache: LruCache::new(250), // 250 is somewhat arbitrary
+            cookie_host_safety_cache: LruCache::new(NonZeroUsize::new(250).unwrap()), // 250 is somewhat arbitrary
             rewrite_history: VecDeque::with_capacity(15),
         }
     }
