@@ -20,7 +20,7 @@ settings = ["serde_json", "url"]
 [dependencies]
 serde_json = { version = "1.0", optional = true }
 openssl = { version = "0.10", optional = true }
-http_req = { version = "0.8", optional = true }
+http_req = { version = "0.9", optional = true }
 log = { version = "0.4", optional = true }
 flate2 = { version = "1.0", optional = true }
 lazy_static = { version = "1.4", optional = true }
